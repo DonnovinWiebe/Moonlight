@@ -5,3 +5,11 @@ version = 4
 [[package]]
 name = "moonlight"
 version = "0.1.0"
+dependencies = [
+ "schrod",
+]
+
+[[package]]
+name = "schrod"
+version = "1.0.0"
+source = "git+https://github.com/DonnovinWiebe/Schrod?tag=1.0.0#cc4ab07df272cce75c802b3ad5c77e7d4a67ff11"

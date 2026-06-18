@@ -4,4 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+iced = "0.14.0"
 schrod = { git = "https://github.com/DonnovinWiebe/Schrod", tag = "1.0.0" }

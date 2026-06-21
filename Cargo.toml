@@ -5,4 +5,7 @@ edition = "2024"
 
 [dependencies]
 iced = "0.14.0"
+image = "0.25.10"
+palette = "0.7.6"
 schrod = { git = "https://github.com/DonnovinWiebe/Schrod", tag = "1.0.0" }
+uuid = { version = "1.23.3", features = ["v7", "serde"] }

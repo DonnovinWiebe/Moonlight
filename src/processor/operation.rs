@@ -1,4 +1,7 @@
-pub enum Edit {
+use image::{ImageBuffer, Rgba};
+
+#[derive(Debug, Copy, Clone)]
+pub enum Operation {
     Rotate(f64), // in degrees
     Crop(Point, Point), // bounding box start, bounding box size
     Exposure(f64),
@@ -11,7 +14,13 @@ pub enum Edit {
     WhitePoint(f64), // adjusts where colors are clipped to max white and regradients image
     BlackPoint(f64), // adjusts where colors are clipped to max black and regradients the image
 }
+impl Operation {
+    pub fn apply_to(&self, image: &mut ImageBuffer<Rgba<f32>, Vec<f32>>) {
+        todo!()
+    }
+}
 
+#[derive(Debug, Copy, Clone)]
 pub struct Point {
     pub x: u32,
     pub y: u32,

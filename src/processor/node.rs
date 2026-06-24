@@ -4,14 +4,24 @@ use uuid::Uuid;
 
 use crate::processor::operation::Operation;
 
+/// Holds the tree edit information for an image project.
 pub struct Pool {
+    /// The source image being edited.
+    /// It is optional since the `Pool` will exist in its `Workspace` before any image is loaded.
     source_image: Option<ImageBuffer<Rgba<f32>, Vec<f32>>>,
+    /// An uncategorized and unsorted mass of all 'Node's.
+    /// Each node keeps track of its own heredity.
     all_nodes: Vec<Node>,
+    /// The base `Node` to which all other `Node`s are attached.
+    /// This cannot be edited or removed.
     root: Node,
+    /// Which `Node` is being looked at.
     position: Uuid,
 }
 impl Pool {
     // initializing
+    /// Creates a new `Pool`.
+    #[must_use]
     pub fn new() -> Pool {
         let root = Node::new(None, Uuid::now_v7(), Operation::Root);
         let root_id = root.get_id();
@@ -24,6 +34,7 @@ impl Pool {
         }
     }
 
+    /// Sets the image.
     pub fn set_image(&mut self, image: ImageBuffer<Rgba<f32>, Vec<f32>>) {
         self.source_image = Some(image);
     }
@@ -31,6 +42,8 @@ impl Pool {
 
     
     // basic getters
+    /// Gets the image.
+    #[must_use]
     pub fn get_image(&self) -> Option<&ImageBuffer<Rgba<f32>, Vec<f32>>> {
         match &self.source_image {
             Some(image) => Some(&image),
@@ -38,6 +51,8 @@ impl Pool {
         }
     }
 
+    /// Gets an immutable reference to a `Node` in the `Pool`.
+    #[must_use]
     pub fn get(&self, id: Uuid) -> Schrod<&Node> {
         for node in &self.all_nodes {
             if node.get_id() == id { return Pass(node) }
@@ -46,6 +61,8 @@ impl Pool {
         Schrod::new_fail(&format!("Id {id} does not exist!"), "Pool::get()").fail(&format!("Failed to get node for id {id}."), "Pool::get()")
     }
 
+    /// Gets a mutable reference to a `Node` in the `Pool`.
+    #[must_use]
     pub fn get_mut(&mut self, id: Uuid) -> Schrod<&mut Node> {
         for node in &mut self.all_nodes {
             if node.get_id() == id { return Pass(node) }
@@ -57,6 +74,8 @@ impl Pool {
 
 
     // resource management
+    /// Clears all cached images in all the `Node`s upstream of the `last_node_id`.
+    #[must_use]
     pub fn prune(&mut self, last_node_id: Uuid) -> Schrod<()> {
         let mut current_node_id = last_node_id;
         loop {
@@ -79,6 +98,9 @@ impl Pool {
 
 
     // tree management
+    /// Adds a new `Node` after the current `position` in the `Pool`.
+    /// If there are `Node`s after the current `position`, the new `Node` is inserted.
+    #[must_use]
     pub fn add_node(&mut self, operation: Operation) -> Schrod<()> {
         // immediately fails if there is no source image
         if self.source_image.is_none() {
@@ -131,6 +153,9 @@ impl Pool {
         Pass(())
     }
     
+    /// Adds a new `Node` after the current `position` in the `Pool`.
+    /// If there are `Node`s after the current `position`, the new `Node` is added to a new branch.
+    #[must_use]
     pub fn add_branch(&mut self, operation: Operation) -> Schrod<()> {
         // immediately fails if there is no source image
         if self.source_image.is_none() {
@@ -156,6 +181,8 @@ impl Pool {
         Pass(())
     }
 
+    /// Edits the `Operation` of the given `Node`.
+    #[must_use]
     pub fn edit_node(&mut self, node_id: Uuid, new_operation: Operation) -> Schrod<()> {
         // cannot edit the root node
         if node_id == self.root.get_id() {
@@ -177,6 +204,8 @@ impl Pool {
         Pass(())
     }
 
+    /// Removes the given `Node` while preserving hereditiy.
+    #[must_use]
     pub fn remove_node(&mut self, node_id: Uuid) -> Schrod<()> {
         // cannot edit the root node
         if node_id == self.root.get_id() {
@@ -247,13 +276,21 @@ impl Pool {
 
 
 
+/// Holds information for an individual `Operation` or step in the edit tree.
 #[derive(Debug, Clone)]
 pub struct Node {
+    /// The unique id for this `Node` so it can be identified.
     id: Uuid,
+    /// Identifies which branch this `Node` lives in.
     branch_id: Uuid,
+    /// holds the parent of this `Node`.
+    /// This will only be `None` for the `root` in the `Pool`.
     parent_id: Option<Uuid>,
+    /// Holds the children of this `Node`.
     children_ids: Vec<Uuid>,
+    /// What edit operation is being performed by this `Node`.
     operation: Operation,
+    /// A chached image of the project up to this point in the tree.
     image: Option<ImageBuffer<Rgba<f32>, Vec<f32>>>,
 }
 impl PartialEq for Node {
@@ -263,6 +300,8 @@ impl PartialEq for Node {
 }
 impl Node {
     // initializing
+    /// Creates a new `Node`.
+    #[must_use]
     pub fn new(parent_id: Option<Uuid>, branch_id: Uuid, operation: Operation) -> Node {
         Node {
             id: Uuid::now_v7(),
@@ -277,18 +316,32 @@ impl Node {
 
     
     // basic getters
+    /// Gets the `id`.
+    #[must_use]
     pub fn get_id(&self) -> Uuid { self.id }
 
+    /// Gets the `branch_id`.
+    #[must_use]
     pub fn get_branch_id(&self) -> Uuid { self.branch_id }
     
+    /// Gets the optional `parent_id`.
+    #[must_use]
     pub fn get_parent_id(&self) -> Option<Uuid> { self.parent_id }
 
+    /// Checks if this `Node` has at least one child.
+    #[must_use]
     pub fn has_child(&self) -> bool { self.children_ids.len() > 0 }
 
+    /// Gets the `children_ids`.
+    #[must_use]
     pub fn get_children_ids(&self) -> Vec<Uuid> { self.children_ids.clone() }
     
+    /// Gets the `operation`.
+    #[must_use]
     pub fn get_operation(&self) -> Operation { self.operation }
 
+    /// Gets the cached image.
+    #[must_use]
     pub fn get_image(&mut self, pool: &Pool) -> Schrod<&ImageBuffer<Rgba<f32>, Vec<f32>>> {
         let update_result = self.update_image(pool);
         match update_result {
@@ -307,18 +360,23 @@ impl Node {
 
 
     // basic editing
+    /// Sets the `parent_id`.
     fn set_parent(&mut self, parent_id: Option<Uuid>) {
         self.parent_id = parent_id;
     }
-    
+
+    /// Adds a child.
     fn add_child(&mut self, child_id: Uuid) {
         self.children_ids.push(child_id);
     }
 
+    /// Adds a list of children.
     fn add_children(&mut self, children_ids: Vec<Uuid>) {
         self.children_ids.extend(children_ids);
     }
 
+    /// Removes a given child.
+    #[must_use]
     fn remove_child(&mut self, child_id: Uuid) -> Schrod<()> {
         if !self.children_ids.contains(&child_id) {
             return Schrod::new_fail(&format!("{child_id} is not a child of {}!", self.id), "Node::remove_child()")
@@ -329,10 +387,13 @@ impl Node {
         Pass(())
     }
 
+    /// Removes all children.
+    #[must_use]
     fn remove_children(&mut self) {
         self.children_ids = Vec::new();
     }
 
+    /// Edits the `operation`.
     fn edit_operation(&mut self, new_operation: Operation) {
         self.operation = new_operation;
     }
@@ -340,6 +401,8 @@ impl Node {
     
 
     // working with images
+    /// Updates the cached image.
+    #[must_use]
     fn update_image(&mut self, pool: &Pool) -> Schrod<()> {
         let new_image_result = self.generate_image(pool);
         if new_image_result.is_fail() {
@@ -352,6 +415,8 @@ impl Node {
         Pass(())
     }
 
+    /// Generates an image for this `Node` following the tree.
+    #[must_use]
     fn generate_image(&self, pool: &Pool) -> Schrod<ImageBuffer<Rgba<f32>, Vec<f32>>> {
         // returns the node's own image if it has already been created
         if let Some(image) = &self.image { return Pass(image.clone()) } // expensive clone?
@@ -391,6 +456,7 @@ impl Node {
         }
     }
 
+    /// Clears the cached image.
     fn snip(&mut self) {
         self.image = None;
     }

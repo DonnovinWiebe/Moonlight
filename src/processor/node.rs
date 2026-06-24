@@ -6,13 +6,22 @@ use crate::processor::operation::Operation;
 
 pub struct Pool {
     source_image: Option<ImageBuffer<Rgba<f32>, Vec<f32>>>,
-    nodes: Vec<Node>,
-    position: Option<Uuid>,
+    all_nodes: Vec<Node>,
+    root: Node,
+    position: Uuid,
 }
 impl Pool {
     // initializing
     pub fn new() -> Pool {
-        Pool { source_image: None, nodes: Vec::new(), position: None }
+        let root = Node::new(None, Uuid::now_v7(), Operation::Root);
+        let root_id = root.get_id();
+        
+        Pool {
+            source_image: None,
+            all_nodes: Vec::new(),
+            root,
+            position: root_id,
+        }
     }
 
     pub fn set_image(&mut self, image: ImageBuffer<Rgba<f32>, Vec<f32>>) {
@@ -30,7 +39,7 @@ impl Pool {
     }
 
     pub fn get(&self, id: Uuid) -> Schrod<&Node> {
-        for node in &self.nodes {
+        for node in &self.all_nodes {
             if node.get_id() == id { return Pass(node) }
         }
 
@@ -38,7 +47,7 @@ impl Pool {
     }
 
     pub fn get_mut(&mut self, id: Uuid) -> Schrod<&mut Node> {
-        for node in &mut self.nodes {
+        for node in &mut self.all_nodes {
             if node.get_id() == id { return Pass(node) }
         }
 
@@ -77,42 +86,84 @@ impl Pool {
                 .fail("Failed to add node.", "Pool::add_node()")
         }
 
-        // checks if the pool has a position set
-        match self.position {
-            // creates a node downstream of the current location
-            Some(position) => {
-                // gets the node at the position
-                let current_node_result = self.get(position);
-                if current_node_result.is_fail() {
-                    return current_node_result
-                        .convert("Pool::add_node()")
-                        .fail("Failed to add node.", "Pool::add_node()")
-                }
-                let current_node = current_node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::add_node()");
-
-                // if the current node already has children, a new branch is created
-                let branch_id = if current_node.has_child() { Uuid::now_v7() } else { current_node.get_branch_id() };
-
-                // creates a new node and sets the current position to the new node
-                let new_node = Node::new(Some(current_node.get_id()), branch_id, operation);
-                self.position = Some(new_node.get_id());
-                self.nodes.push(new_node);
+        // gets the current position for repeated use
+        let position = self.position;
+        
+        // gets the branch id from the current node and takes its children ids out to be moved to the new node
+        let (branch_id, children_ids) = {
+            let current_node_result = self.get_mut(position);
+            if current_node_result.is_fail() {
+                return current_node_result
+                    .convert("Pool::add_node()")
+                    .fail("Failed to add node.", "Pool::add_node()")
             }
+            let current_node = current_node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::add_node()");
+            let children_ids = current_node.get_children_ids();
+            current_node.remove_children();
+            (current_node.get_branch_id(), children_ids)
+        };
 
-            // creates a node downstream of the base image
-            None => {
-                // creates a new node and sets the current position to the new node
-                let new_node = Node::new(None, Uuid::now_v7(), operation);
-                self.position = Some(new_node.get_id());
-                self.nodes.push(new_node);
+        // creates a new node and gives it all the children
+        let mut new_node = Node::new(Some(position), branch_id, operation);
+        new_node.add_children(children_ids.clone());
+
+        // gives all the children the new node for their parent
+        for child_id in children_ids {
+            let child_result = self.get_mut(child_id);
+            if child_result.is_fail() {
+                return child_result
+                    .convert("Pool::add_node()")
+                    .fail("Failed to add node.", "Pool::add_node()")
             }
+            let child = child_result.wont_fail("This is past an is_fail() guard clause.", "Pool::add_node()");
+            child.set_parent(Some(position));
         }
+
+        // updates the current position and adds the new node to the pool
+        self.position = new_node.get_id();
+        self.all_nodes.push(new_node);
+
+        // prunes up to the new node to save resources
+        let prune_result = self.prune(self.position);
+        if prune_result.is_fail() { return prune_result.convert("Pool::add_node()") }
+
+        // returns a success
+        Pass(())
+    }
+    
+    pub fn add_branch(&mut self, operation: Operation) -> Schrod<()> {
+        // immediately fails if there is no source image
+        if self.source_image.is_none() {
+            return Schrod::new_fail("No source image found!", "Pool::add_branch()")
+                .fail("Failed to add branch.", "Pool::add_branch()")
+        }
+
+        // gets the current position for repeated use
+        let position = self.position;
+
+        // creates a new node with a new branch id
+        let new_node = Node::new(Some(position), Uuid::now_v7(), operation);
+
+        // updates the current position and adds the new node to the pool
+        self.position = new_node.get_id();
+        self.all_nodes.push(new_node);
+
+        // prunes up to the new node to save resources
+        let prune_result = self.prune(self.position);
+        if prune_result.is_fail() { return prune_result.convert("Pool::add_branch()") }
 
         // returns a success
         Pass(())
     }
 
     pub fn edit_node(&mut self, node_id: Uuid, new_operation: Operation) -> Schrod<()> {
+        // cannot edit the root node
+        if node_id == self.root.get_id() {
+            return Schrod::new_fail("Cannot edit root node!", "Pool::edit_node()")
+                .fail("Failed to edit node.", "Pool::edit_node()")
+        }
+
+        // edits the node
         let node_result = self.get_mut(node_id);
         if node_result.is_fail() {
             return node_result
@@ -122,70 +173,74 @@ impl Pool {
         let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::edit_node()");
         node.edit_operation(new_operation);
 
+        // returns a success
         Pass(())
     }
 
     pub fn remove_node(&mut self, node_id: Uuid) -> Schrod<()> {
-        // the node being removed
-        let node_result = self.get_mut(node_id);
-        if node_result.is_fail() {
-            return node_result
-                .convert("Pool::remove_node()")
+        // cannot edit the root node
+        if node_id == self.root.get_id() {
+            return Schrod::new_fail("Cannot edit root node!", "Pool::remove_node()")
+                .fail("Failed to edit node.", "Pool::remove_node()")
+        }
+        
+        // gets the parent id and children ids for the node
+        let (parent_id, children_ids) = {
+            let node_result = self.get(node_id);
+            if node_result.is_fail() {
+                return node_result
+                    .convert("Pool::remove_node()")
+                    .fail("Failed to remove node.", "Pool::remove_node()")
+            }
+            let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::remove_node()");
+            (node.get_parent_id(), node.get_children_ids())
+        };
+
+        // gives the parent the children ids
+        if let Some(parent_id) = parent_id {
+            let parent_result = self.get_mut(parent_id);
+            if parent_result.is_fail() {
+                return parent_result
+                    .convert("Pool::remove_node()")
+                    .fail("Failed to remove node.", "Pool::remove_node()")
+            }
+            let parent = parent_result.wont_fail("This is past an is_fail() guard clause.", "Pool::remove_node()");
+            parent.add_children(children_ids.clone());
+        }
+
+        // every node will have a parent except the root will have a parent
+        else {
+            return Schrod::new_fail("Tried to remove a node that has no parent!", "Pool::remove_node()")
                 .fail("Failed to remove node.", "Pool::remove_node()")
         }
-        let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::remove_node()");
 
-        // adding the node's children to the node's parent and setting the children's parents as the nodes parent
-        match node.get_parent_id() {
-            // if the node has a parent
-            Some(parent_id) => {
-                // gets the parent
-                let parent_node_result = self.get_mut(parent_id);
-                if parent_node_result.is_fail() {
-                    return parent_node_result
-                        .convert("Pool::remove_node()")
-                        .fail("Failed to remove node.", "Pool::remove_node()")
-                }
-                let parent_node = parent_node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::remove_node()");
-
-                // updates the node's parent to have all the node's children
-                let children_ids = node.get_children_ids();
-                parent_node.add_children(children_ids.clone());
-                
-                // updates all the node's children to have the node's parent as their parent
-                children_ids.into_iter().for_each(|id| {
-                    let child_node_result = self.get_mut(id);
-                    if child_node_result.is_fail() {
-                        return child_node_result
-                            .convert("Pool::remove_node()")
-                            .fail("Failed to remove node.", "Pool::remove_node()")
-                    }
-                    let child_node = child_node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::remove_node()");
-                    child_node.set_parent(Some(parent_id));
-                });
+        // gives the parent id to the children
+        for child_id in children_ids {
+            let child_result = self.get_mut(child_id);
+            if child_result.is_fail() {
+                return child_result
+                    .convert("Pool::remove_node()")
+                    .fail("Failed to remove node.", "Pool::remove_node()")
             }
+            let child = child_result.wont_fail("This is past an is_fail() guard clause.", "Pool::remove_node()");
+            child.set_parent(parent_id);
+        }
 
-            // if the node has no parent
-            None => {
-                // updates all the node's children to have the node's parent (the pool) as their parent
-                let children_ids = node.get_children_ids();
-                children_ids.into_iter().for_each(|id| {
-                    let child_node_result = self.get_mut(id);
-                    if child_node_result.is_fail() {
-                        return child_node_result
-                            .convert("Pool::remove_node()")
-                            .fail("Failed to remove node.", "Pool::remove_node()")
-                    }
-                    let child_node = child_node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::remove_node()");
-                    child_node.set_parent(None);
-                });
+        // moves the pool's position if it is set to the node being removed
+        if self.position == node_id {
+            if let Some(parent_id) = parent_id { self.position = parent_id; }
+            
+            // every node will have a parent except the root will have a parent
+            else {
+                return Schrod::new_fail("Tried to remove a node that has no parent!", "Pool::remove_node()")
+                    .fail("Failed to remove node.", "Pool::remove_node()")
             }
         }
 
         // removing the node
-        self.nodes.retain(|existing_node| existing_node !=  node);
+        self.all_nodes.retain(|existing_node| existing_node.get_id() !=  node_id);
 
-        // succeeds
+        // returns a success
         Pass(())
     }
 }
@@ -272,6 +327,10 @@ impl Node {
         self.children_ids.retain(|id| *id != child_id);
 
         Pass(())
+    }
+
+    fn remove_children(&mut self) {
+        self.children_ids = Vec::new();
     }
 
     fn edit_operation(&mut self, new_operation: Operation) {

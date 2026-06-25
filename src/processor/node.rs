@@ -138,7 +138,7 @@ impl Pool {
                     .fail("Failed to add node.", "Pool::add_node()")
             }
             let child = child_result.wont_fail("This is past an is_fail() guard clause.", "Pool::add_node()");
-            child.set_parent(Some(position));
+            child.set_parent(Some(new_node.get_id()));
         }
 
         // updates the current position and adds the new node to the pool
@@ -167,7 +167,7 @@ impl Pool {
         let position = self.position;
 
         // creates a new node with a new branch id
-        let new_node = Node::new(Some(position), Uuid::now_v7(), operation);
+        let mut new_node = Node::new(Some(position), Uuid::now_v7(), operation);
 
         // updates the current position and adds the new node to the pool
         self.position = new_node.get_id();
@@ -225,7 +225,7 @@ impl Pool {
             (node.get_parent_id(), node.get_children_ids())
         };
 
-        // gives the parent the children ids
+        // gives the parent the children ids and removes the given node as a child
         if let Some(parent_id) = parent_id {
             let parent_result = self.get_mut(parent_id);
             if parent_result.is_fail() {
@@ -235,6 +235,12 @@ impl Pool {
             }
             let parent = parent_result.wont_fail("This is past an is_fail() guard clause.", "Pool::remove_node()");
             parent.add_children(children_ids.clone());
+            let remove_result = parent.remove_child(node_id);
+            if remove_result.is_fail() {
+                return remove_result
+                    .convert("Pool::remove_node()")
+                    .fail("Failed to remove node.", "Pool::remove_node()")
+            }
         }
 
         // every node will have a parent except the root will have a parent

@@ -71,6 +71,46 @@ impl Pool {
         Schrod::new_fail(&format!("Id {id} does not exist!"), "Pool::get_mut()").fail(&format!("Failed to get node for id {id}."), "Pool::get_mut()")
     }
 
+    /// Gets all the farthest downstream `Node`s from the given `Node`.
+    /// This will include the given `Node` if it is the downstream end point.
+    #[must_use]
+    fn get_downstream_end_nodes(&self, node_id: Uuid) -> Schrod<Vec<Uuid>> {
+        // the lists in use
+        let mut current_end_points: Vec<Uuid> = vec![node_id];
+        let mut new_end_points: Vec<Uuid> = Vec::new();
+        let mut verified_end_points: Vec<Uuid> = Vec::new();
+
+        // continues until all downstream nodes have been explored
+        loop {
+            // gets the node
+            for current_end_point in &current_end_points {
+                let node_result = self.get(*current_end_point);
+                if node_result.is_fail() {
+                    return node_result
+                        .convert("Pool::get_downstream_end_nodes()")
+                        .fail("Failed to get downstream end nodes.", "Pool::get_downstream_end_nodes()")
+                }
+                let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::get_downstream_end_nodes()");
+
+                // gets the nodes children if it has any
+                if node.has_child() { new_end_points.extend(node.get_children_ids()); }
+                // adds the node to the verified end points if it has no children
+                else { verified_end_points.push(node.get_id()) }
+            }
+
+            // breaks out of the loop if no new nodes were found to explore
+            if new_end_points.is_empty() { break }
+            // moves the new nodes to the current list being explored
+            else {
+                current_end_points = new_end_points;
+                new_end_points = Vec::new();
+            }
+        }
+
+        // returns the verified end points
+        Pass(verified_end_points)
+    }
+
 
 
     // resource management

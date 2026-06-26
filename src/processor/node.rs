@@ -2,7 +2,15 @@ use image::{ImageBuffer, Rgba};
 use schrod::Schrod::{self, Fail, Pass};
 use uuid::Uuid;
 
-use crate::processor::operation::Operation;
+use crate::processor::{node::Direction::{DownStream, UpStream}, operation::Operation};
+
+/// Lists the two directions that can be traversed in the `Node` tree.
+pub enum Direction {
+    /// Moving upwards toward the `root`.
+    UpStream,
+    /// Moving downwards towards the tips.
+    DownStream,
+}
 
 /// Holds the tree edit information for an image project.
 pub struct Pool {
@@ -42,12 +50,12 @@ impl Pool {
 
     
     // basic getters
-    /// Gets the image.
+    /// Gets the source image of the `Pool`.
     #[must_use]
     pub fn get_image(&self) -> Option<&ImageBuffer<Rgba<f32>, Vec<f32>>> {
         match &self.source_image {
-            Some(image) => Some(&image),
-            None => None
+            Some(image) => { Some(image) }
+            None => { None }
         }
     }
 
@@ -71,6 +79,79 @@ impl Pool {
         Schrod::new_fail(&format!("Id {id} does not exist!"), "Pool::get_mut()").fail(&format!("Failed to get node for id {id}."), "Pool::get_mut()")
     }
 
+    /// Gets all the upstream `Node`s from the given `Node`.
+    /// This does not include the given `Node`.
+    #[must_use]
+    fn get_all_upstream_nodes(&self, node_id: Uuid) -> Schrod<Vec<Uuid>> {
+        // the lists in use
+        let mut current_node_id = node_id;
+        let mut all_nodes: Vec<Uuid> = Vec::new();
+
+        // loops until every node upstream has been expolored
+        loop {
+            // gets the current node
+            let node_result = self.get(current_node_id);
+            if node_result.is_fail() {
+                return node_result
+                    .convert("Pool::get_all_upstream_nodes()")
+                    .fail("Failed to get upstream end nodes.", "Pool::get_all_upstream_nodes()")
+            }
+            let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::get_all_upstream_nodes()");
+            
+
+            // adds the node to the list of all nodes
+            if node.get_id() != node_id { all_nodes.push(node.get_id()) }
+            // sets the node's parent as the curren node or ends the loop if the top has been found
+            match node.get_parent_id() {
+                Some(parent_id) => { current_node_id = parent_id }
+                None => { break }
+            }
+        }
+        
+        // returns the verified end points
+        Pass(all_nodes)
+    }
+
+    /// Gets all the downstream `Node`s from the given `Node`.
+    /// This does not include the given `Node`.
+    #[must_use]
+    fn get_all_downstream_nodes(&self, node_id: Uuid) -> Schrod<Vec<Uuid>> {
+        // the lists in use
+        let mut current_nodes: Vec<Uuid> = vec![node_id];
+        let mut new_nodes: Vec<Uuid> = Vec::new();
+        let mut all_nodes: Vec<Uuid> = Vec::new();
+
+        // continues until all downstream nodes have been explored
+        loop {
+            // gets the current node
+            for current_node in &current_nodes {
+                let node_result = self.get(*current_node);
+                if node_result.is_fail() {
+                    return node_result
+                        .convert("Pool::get_downstream_end_nodes()")
+                        .fail("Failed to get downstream end nodes.", "Pool::get_downstream_end_nodes()")
+                }
+                let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::get_downstream_end_nodes()");
+
+                // adds the node to the list of all nodes
+                if node.get_id() != node_id { all_nodes.push(node.get_id()) }
+                // gets the nodes children if it has any
+                if node.has_child() { new_nodes.extend(node.get_children_ids()); }
+            }
+
+            // breaks out of the loop if no new nodes were found to explore
+            if new_nodes.is_empty() { break }
+            // moves the new nodes to the current list being explored
+            else {
+                current_nodes = new_nodes;
+                new_nodes = Vec::new();
+            }
+        }
+
+        // returns the verified end points
+        Pass(all_nodes)
+    }
+
     /// Gets all the farthest downstream `Node`s from the given `Node`.
     /// This will include the given `Node` if it is the downstream end point.
     #[must_use]
@@ -82,7 +163,7 @@ impl Pool {
 
         // continues until all downstream nodes have been explored
         loop {
-            // gets the node
+            // gets the current node
             for current_end_point in &current_end_points {
                 let node_result = self.get(*current_end_point);
                 if node_result.is_fail() {
@@ -109,30 +190,6 @@ impl Pool {
 
         // returns the verified end points
         Pass(verified_end_points)
-    }
-
-
-
-    // resource management
-    /// Clears all cached images in all the `Node`s upstream of the `last_node_id`.
-    #[must_use]
-    pub fn prune(&mut self, last_node_id: Uuid) -> Schrod<()> {
-        let mut current_node_id = last_node_id;
-        loop {
-            let node_result = self.get_mut(current_node_id);
-            if node_result.is_fail() {
-                return node_result
-                    .convert("Pool::prune()")
-                    .fail("Failed to prune.", "Pool::prune()")
-            }
-            let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::prune()");
-            
-            node.snip();
-            if let Some(parent_id) = node.get_parent_id() { current_node_id = parent_id; }
-            else { break; }
-        }
-        
-        Pass(())
     }
 
 
@@ -184,9 +241,18 @@ impl Pool {
         // updates the current position and adds the new node to the pool
         self.position = new_node.get_id();
         self.all_nodes.push(new_node);
+        
+        // updates the image of the node
+        let update_result = self.update_image_for(self.position);
+        if update_result.is_fail() {
+            return update_result
+                .convert("Pool::add_node()")
+        }
 
-        // prunes up to the new node to save resources
-        let prune_result = self.prune(self.position);
+        // prunes to save resources and prevent erroneous image edit states downstream
+        let prune_result = self.prune(self.position, Direction::UpStream);
+        if prune_result.is_fail() { return prune_result.convert("Pool::add_node()") }
+        let prune_result = self.prune(self.position, Direction::DownStream);
         if prune_result.is_fail() { return prune_result.convert("Pool::add_node()") }
 
         // returns a success
@@ -207,14 +273,21 @@ impl Pool {
         let position = self.position;
 
         // creates a new node with a new branch id
-        let mut new_node = Node::new(Some(position), Uuid::now_v7(), operation);
+        let new_node = Node::new(Some(position), Uuid::now_v7(), operation);
 
         // updates the current position and adds the new node to the pool
         self.position = new_node.get_id();
         self.all_nodes.push(new_node);
 
-        // prunes up to the new node to save resources
-        let prune_result = self.prune(self.position);
+        // updates the image of the node
+        let update_result = self.update_image_for(self.position);
+        if update_result.is_fail() {
+            return update_result
+                .convert("Pool::add_branch()")
+        }
+        
+        // prunes to save resources
+        let prune_result = self.prune(self.position, Direction::UpStream);
         if prune_result.is_fail() { return prune_result.convert("Pool::add_branch()") }
 
         // returns a success
@@ -229,6 +302,10 @@ impl Pool {
             return Schrod::new_fail("Cannot edit root node!", "Pool::edit_node()")
                 .fail("Failed to edit node.", "Pool::edit_node()")
         }
+        
+        // prunes to prevent erroneous image edit states downstream
+        let prune_result = self.prune(self.position, Direction::DownStream);
+        if prune_result.is_fail() { return prune_result.convert("Pool::edit_node()") }
 
         // edits the node
         let node_result = self.get_mut(node_id);
@@ -239,6 +316,13 @@ impl Pool {
         }
         let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::edit_node()");
         node.edit_operation(new_operation);
+
+        // updates the image of the node
+        let update_result = self.update_image_for(node_id);
+        if update_result.is_fail() {
+            return update_result
+                .convert("Pool::edit_node()")
+        }
 
         // returns a success
         Pass(())
@@ -252,6 +336,10 @@ impl Pool {
             return Schrod::new_fail("Cannot edit root node!", "Pool::remove_node()")
                 .fail("Failed to edit node.", "Pool::remove_node()")
         }
+        
+        // prunes to prevent erroneous image edit states downstream
+        let prune_result = self.prune(self.position, Direction::DownStream);
+        if prune_result.is_fail() { return prune_result.convert("Pool::remove_node()") }
         
         // gets the parent id and children ids for the node
         let (parent_id, children_ids) = {
@@ -314,6 +402,150 @@ impl Pool {
 
         // removing the node
         self.all_nodes.retain(|existing_node| existing_node.get_id() !=  node_id);
+        
+        // updates the image for the current position
+        let update_result = self.update_image_for(self.position);
+        if update_result.is_fail() {
+            return update_result
+                .convert("Pool::remove_node()")
+        }
+        
+        // returns a success
+        Pass(())
+    }
+
+
+
+    // resource management
+    /// Gets the cached image for the given `Node`.
+    /// If the `Node` has no cached image, a new one is generated.
+    #[must_use]
+    pub fn get_image_for(&mut self, node_id: Uuid) -> Schrod<&ImageBuffer<Rgba<f32>, Vec<f32>>> {
+        // updates the image in the given node
+        let update_result = self.update_image_for(node_id);
+        match update_result {
+            Pass(()) => {
+                // gets the current node
+                let node_result = self.get(node_id);
+                if node_result.is_fail() {
+                    return node_result
+                        .convert("Pool::get_image_for()")
+                        .fail(&format!("Failed to get the image for {node_id}."), "Pool::get_image_for()")
+                }
+                let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::get_image_for()");
+
+                // tried to get the cached image
+                if let Some(image) = node.get_image() { return Pass(image) }
+                return Schrod::new_fail("Failed to get image after successful update!", "Pool::get_image_for()")
+                    .fail(&format!("Failed to get the image for {node_id}."), "Pool::get_image_for()")
+            }
+            Fail(_) => {
+                return update_result
+                    .convert("Pool::get_image_for()")
+                    .fail(&format!("Failed to get the image for {node_id}."), "Pool::get_image_for()")
+            }
+        }
+    }
+    
+    /// Updates the cached image for the given `Node`.
+    #[must_use]
+    fn update_image_for(&mut self, node_id: Uuid) -> Schrod<()> {
+        // gets the updated the image
+        let new_image_result = self.generate_image_for(node_id);
+        if new_image_result.is_fail() {
+            return new_image_result
+                .convert("Pool::update_image_for()")
+                .fail("Failed to generate image.", "Pool::update_image_for()")
+        }
+        let new_image = new_image_result.wont_fail("This is past an is_fail() guard clause.", "Pool::update_image_for()");
+        
+        // gets the node
+        let node_result = self.get_mut(node_id);
+        if node_result.is_fail() {
+            return node_result
+                .convert("Pool::update_image_for()")
+                .fail("Failed to generate image.", "Pool::update_image_for()")
+        }
+        let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::update_image_for()");
+
+        // updates the image
+        node.image = Some(new_image);
+        Pass(())
+    }
+
+    /// Generates an image for the given `Node`
+    #[must_use]
+    fn generate_image_for(&self, node_id: Uuid) -> Schrod<ImageBuffer<Rgba<f32>, Vec<f32>>> {
+        // gets the node
+        let node_result = self.get(node_id);
+        if node_result.is_fail() {
+            return node_result
+                .convert("Pool::generate_image_for()")
+                .fail("Failed to generate image.", "Pool::generate_image_for()")
+        }
+        let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::generate_image_for()");
+
+        // this would cut back on operation time, but may cause some nodes not to update
+        /*
+        // returns the node's own image if it has already been created
+        if let Some(image) = node.get_image() { return Pass(image.clone()) } // expensive clone?
+        */
+
+        // checks if this node has a parent
+        match node.get_parent_id() {
+            // generates a new image based on this node's parent
+            Some(parent_id) => {
+                let previous_image_result =  self.generate_image_for(parent_id);
+                if previous_image_result.is_fail() { return previous_image_result.fail("Failed to generate image.", "Pool::generate_image_for()") }
+                let mut previous_image = previous_image_result.wont_fail("This is past an is_fail() guard clause.", "Pool::generate_image_for()");
+    
+                node.get_operation().apply_to(&mut previous_image);
+                let new_image = previous_image;
+                return Pass(new_image)
+            }
+            
+            // generates a new image based on the source image of the pool
+            None => {
+                if let Some(source_image) = self.get_image() {
+                    let mut new_image = source_image.clone();
+                    node.get_operation().apply_to(&mut new_image);
+                    return Pass(new_image)
+                }
+                else {
+                    return Schrod::new_fail("No source image found!", "Pool::generate_image_for()")
+                        .fail("Failed to generate image.", "Pool::generate_image_for()")
+                }
+            }
+        }
+    }
+    
+    /// Clears all cached images in all the `Node`s `UpStream` or `DownStream` of the `starting_node_id`.
+    /// This does not affect the given `Node`.
+    #[must_use]
+    pub fn prune(&mut self, starting_node_id: Uuid, direction: Direction) -> Schrod<()> {
+        // gets the nodes to snip
+        let node_ids_to_snip_result = match direction {
+            UpStream => self.get_all_upstream_nodes(starting_node_id),
+            DownStream => self.get_all_downstream_nodes(starting_node_id),
+        };
+        if node_ids_to_snip_result.is_fail() {
+            return node_ids_to_snip_result
+                .convert("Pool::prune()")
+                .fail("Failed to prune.", "Pool::prune()")
+        }
+        let node_ids_to_snip = node_ids_to_snip_result.wont_fail("This is past an is_fail() guard clause.", "Pool::prune()");
+
+        // snips each node
+        for node_id in &node_ids_to_snip {
+            let node_result = self.get_mut(*node_id);
+            if node_result.is_fail() {
+                return node_result
+                    .convert("Pool::prune()")
+                    .fail("Failed to prune.", "Pool::prune()")
+            }
+            let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Pool::prune()");
+            node.snip_image();
+        }
 
         // returns a success
         Pass(())
@@ -388,18 +620,10 @@ impl Node {
 
     /// Gets the cached image.
     #[must_use]
-    pub fn get_image(&mut self, pool: &Pool) -> Schrod<&ImageBuffer<Rgba<f32>, Vec<f32>>> {
-        let update_result = self.update_image(pool);
-        match update_result {
-            Pass(()) => {
-                if let Some(image) = &self.image { return Pass(image) }
-                return Schrod::new_fail("Failed to get image after successful update!", "Node::get_image()").fail("Failed to get image.", "Node::get_image()")
-            }
-            Fail(_) => {
-                return update_result
-                    .convert("Node::get_image()")
-                    .fail("Failed to get image.", "Node::get_image()")
-            }
+    pub fn get_image(&self) -> Option<&ImageBuffer<Rgba<f32>, Vec<f32>>> {
+        match &self.image {
+            Some(image) => { Some(image) }
+            None => { None }
         }
     }
 
@@ -434,7 +658,6 @@ impl Node {
     }
 
     /// Removes all children.
-    #[must_use]
     fn remove_children(&mut self) {
         self.children_ids = Vec::new();
     }
@@ -444,66 +667,13 @@ impl Node {
         self.operation = new_operation;
     }
 
-    
-
-    // working with images
-    /// Updates the cached image.
-    #[must_use]
-    fn update_image(&mut self, pool: &Pool) -> Schrod<()> {
-        let new_image_result = self.generate_image(pool);
-        if new_image_result.is_fail() {
-            return new_image_result
-                .convert("Node::update_image()")
-                .fail("Failed to generate image.", "Node::update_image()")
-        }
-        let new_image = new_image_result.wont_fail("This is past an is_fail() guard clause.", "Node::update_image()");
+    /// Sets the image
+    fn set_image(&mut self, new_image: ImageBuffer<Rgba<f32>, Vec<f32>>) {
         self.image = Some(new_image);
-        Pass(())
-    }
-
-    /// Generates an image for this `Node` following the tree.
-    #[must_use]
-    fn generate_image(&self, pool: &Pool) -> Schrod<ImageBuffer<Rgba<f32>, Vec<f32>>> {
-        // returns the node's own image if it has already been created
-        if let Some(image) = &self.image { return Pass(image.clone()) } // expensive clone?
-
-        // checks if this node has a parent
-        match self.get_parent_id() {
-            // generates a new image based on this node's parent
-            Some(parent_id) => {
-                let parent_result = pool.get(parent_id);
-                if parent_result.is_fail() {
-                    return parent_result
-                        .convert("Node::generate_image()")
-                        .fail("Failed to generate image.", "Node::generate_image()")
-                }
-                let parent = parent_result.wont_fail("This is past an is_fail() guard clause.", "Node::generate_image()");
-                let previous_image_result =  parent.generate_image(&pool);
-                if previous_image_result.is_fail() { return previous_image_result.fail("Failed to generate image.", "Node::generate_image()") }
-                let mut previous_image = previous_image_result.wont_fail("This is past an is_fail() guard clause.", "Node::generate_image()");
-    
-                self.get_operation().apply_to(&mut previous_image);
-                let new_image = previous_image;
-                return Pass(new_image)
-            }
-            
-            // generates a new image based on the source image of the pool
-            None => {
-                if let Some(source_image) = pool.get_image() {
-                    let mut new_image = source_image.clone();
-                    self.get_operation().apply_to(&mut new_image);
-                    return Pass(new_image)
-                }
-                else {
-                    return Schrod::new_fail("No source image found!", "Node::generate_image()")
-                        .fail("Failed to generate image.", "Node::generate_image()")
-                }
-            }
-        }
     }
 
     /// Clears the cached image.
-    fn snip(&mut self) {
+    fn snip_image(&mut self) {
         self.image = None;
     }
 }

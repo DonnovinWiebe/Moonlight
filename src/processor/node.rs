@@ -473,7 +473,7 @@ impl Pool {
         Pass(())
     }
 
-    /// Generates an image for the given `Node`
+    /// Generates a new image for the given `Node`
     #[must_use]
     fn generate_image_for(&self, node_id: Uuid) -> Schrod<ImageBuffer<Rgba<f32>, Vec<f32>>> {
         // gets the node

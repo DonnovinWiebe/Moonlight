@@ -2,6 +2,7 @@ use image::{ImageBuffer, Rgba};
 
 #[derive(Debug, Copy, Clone)]
 pub enum Operation {
+    Root,
     Rotate(f64), // in degrees
     Crop(Point, Point), // bounding box start, bounding box size
     Exposure(f64),

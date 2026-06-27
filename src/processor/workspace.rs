@@ -41,8 +41,17 @@ impl Tree {
     }
 
     /// Sets the image.
-    pub fn set_image(&mut self, image: ImageBuffer<Rgba<f32>, Vec<f32>>) {
-        self.source_image = Some(image);
+    pub fn load_image(&mut self, path: PathBuf) -> Schrod<()> {
+        let load_result = Schrod::from_result(image::open(path.clone()), &format!("Failed to open image at {:.?}", &path), "Tree::load_image()");
+        if load_result.is_fail() {
+            return load_result
+                .convert("Tree::load_image()")
+                .fail(&format!("Failed to open image at {:.?}", &path), "Tree::load_image()")
+        }
+        let rgba_image = load_result.wont_fail("This is past an is_fail() guard clause.", "Tree::load_image()").into_rgba32f();
+        self.source_image = Some(rgba_image);
+
+        Pass(())
     }
 
 

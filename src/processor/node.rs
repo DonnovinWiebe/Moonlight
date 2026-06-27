@@ -128,12 +128,7 @@ impl Node {
     }
 
     /// Sets the image
-    pub fn set_image(&mut self, new_image: ImageBuffer<Rgba<f32>, Vec<f32>>) {
-        self.image = Some(new_image);
-    }
-
-    /// Clears the cached image.
-    pub fn snip_image(&mut self) {
-        self.image = None;
+    pub fn set_image(&mut self, new_image: Option<ImageBuffer<Rgba<f32>, Vec<f32>>>) {
+        self.image = new_image;
     }
 }

@@ -469,7 +469,7 @@ impl Tree {
         let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Tree::update_image_for()");
 
         // updates the image
-        node.set_image(new_image);
+        node.set_image(Some(new_image));
         Pass(())
     }
 
@@ -548,7 +548,7 @@ impl Tree {
                     .fail("Failed to prune.", "Tree::prune()")
             }
             let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Tree::prune()");
-            node.snip_image();
+            node.set_image(None);
         }
 
         // returns a success

@@ -1,5 +1,5 @@
 use iced::{Element, Subscription, Task, Theme, event, widget::Text};
-use materialui::material::MaterialThemes;
+use materialui::{components::ThemeProvider, material::MaterialThemes};
 
 use crate::{state::signal::Signal, workspace::tree::Tree};
 
@@ -15,6 +15,12 @@ pub struct App {
     // projects
     current_tree: Option<usize>,
     orchard: Vec<Tree>,
+}
+impl ThemeProvider for App {
+    /// Gets the current `MaterialTheme'.
+    fn material_theme(&self) -> MaterialThemes {
+        self.material_theme
+    }
 }
 impl App {
     // initializing
@@ -41,11 +47,6 @@ impl App {
     #[must_use]
     pub fn title(&self) -> String {
         "Moonlight".to_string()
-    }
-
-    /// Gets the current `MaterialTheme'.
-    pub fn get_material_theme(&self) -> MaterialThemes {
-        self.material_theme
     }
     
     /// Gets the current `Theme`.

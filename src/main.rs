@@ -3,7 +3,7 @@
 
 use crate::state::app::App;
 
-pub mod processor;
+pub mod workspace;
 pub mod state;
 pub mod ui;
 

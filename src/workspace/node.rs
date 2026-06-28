@@ -2,7 +2,7 @@ use image::{ImageBuffer, Rgba};
 use schrod::Schrod::{self, Pass};
 use uuid::Uuid;
 
-use crate::processor::operation::Operation;
+use crate::workspace::operation::Operation;
 
 /// Lists the two directions that can be traversed in the `Node` `Tree`.
 pub enum Direction {

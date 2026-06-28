@@ -4,7 +4,7 @@ use image::{ImageBuffer, Rgba};
 use schrod::Schrod::{self, Fail, Pass};
 use uuid::Uuid;
 
-use crate::processor::{node::{Direction::{self, DownStream, UpStream}, Node}, operation::Operation};
+use crate::workspace::{node::{Direction::{self, DownStream, UpStream}, Node}, operation::Operation};
 
 /// Holds all the project data.
 pub struct Tree {

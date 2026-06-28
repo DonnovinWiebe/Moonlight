@@ -202,6 +202,16 @@ impl Tree {
         Pass(verified_end_points)
     }
 
+    /// Gets every branch id.
+    #[must_use]
+    pub fn get_branch_ids(&self) -> Vec<Uuid> {
+        let mut branches = Vec::new();
+        for node in &self.all_nodes {
+            if !branches.contains(&node.get_branch_id()) { branches.push(node.get_branch_id()) }
+        }
+        branches
+    }
+
 
 
     // tree management

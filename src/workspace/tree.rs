@@ -62,8 +62,8 @@ impl Tree {
     // basic getters
     /// Gets a `Handle` that `Iced` can display.
     #[must_use]
-    pub fn get_handle_for(&self, node_id: Uuid) -> Schrod<Handle> {
-        let node_result = self.get(node_id);
+    pub fn get_current_handle(&self) -> Schrod<Handle> {
+        let node_result = self.get(self.position);
         if node_result.is_fail() {
             return node_result
                 .convert("Tree::get_handle_for()")

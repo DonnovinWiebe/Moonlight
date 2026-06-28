@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use iced::widget::image::Handle;
 use image::{ImageBuffer, Rgba};
 use schrod::Schrod::{self, Fail, Pass};
 use uuid::Uuid;
@@ -40,7 +41,8 @@ impl Tree {
         }
     }
 
-    /// Sets the image.
+    /// Sets the image path.
+    #[must_use]
     pub fn set_source_path(&mut self, path: PathBuf) -> Schrod<()> {
         let load_result = Schrod::from_result(image::open(path.clone()), &format!("Failed to open image at {:.?}", &path), "Tree::set_source_path()");
         if load_result.is_fail() {
@@ -58,9 +60,33 @@ impl Tree {
 
     
     // basic getters
+    /// Gets a `Handle` that `Iced` can display.
+    #[must_use]
+    pub fn get_handle_for(&self, node_id: Uuid) -> Schrod<Handle> {
+        let node_result = self.get(node_id);
+        if node_result.is_fail() {
+            return node_result
+                .convert("Tree::get_handle_for()")
+                .fail("Failed to get handle for node.", "Tree::get_handle_for()")
+        }
+        let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Tree::get_handle_for()");
+
+        match node.get_image() {
+            Some(image) => {
+                let bytes: Vec<u8> = image.as_raw().iter().map(|&v| (v * 255.0).clamp(0.0, 255.0) as u8).collect();
+                Pass(Handle::from_rgba(image.width(), image.height(), bytes))
+            }
+            
+            None => {
+                Schrod::new_fail("No image generated!", "Tree::get_handle_for()")
+                    .fail("Failed to get handle for node.", "Tree::get_handle_for()")
+            }
+        }
+    }
+        
     /// Gets the source image of the `Tree`.
     #[must_use]
-    pub fn get_image(&self) -> Option<&ImageBuffer<Rgba<f32>, Vec<f32>>> {
+    fn get_image(&self) -> Option<&ImageBuffer<Rgba<f32>, Vec<f32>>> {
         match &self.source_image {
             Some(image) => { Some(image) }
             None => { None }

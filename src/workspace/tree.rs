@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 
 use iced::widget::image::Handle;
-use image::{ImageBuffer, Rgba};
 use schrod::Schrod::{self, Fail, Pass};
 use uuid::Uuid;
 

@@ -6,7 +6,8 @@ edition = "2024"
 [dependencies]
 iced = { version = "0.14.0", features = ["advanced", "canvas", "image"] }
 image = "0.25.10"
-palette = "0.7.6"
+palette = { version = "0.7.6", features = ["std"] }
 materialui = { git = "https://github.com/DonnovinWiebe/MaterialUI", tag = "1.0.0" }
 schrod = { git = "https://github.com/DonnovinWiebe/Schrod", tag = "1.0.0" }
 uuid = { version = "1.23.3", features = ["v7", "serde"] }
+serde = "1.0.228"

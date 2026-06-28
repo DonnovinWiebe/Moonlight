@@ -1,6 +1,9 @@
 use image::{ImageBuffer, Rgba};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Copy, Clone)]
+use crate::workspace::node::WorkingImage;
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum Operation {
     /// Only used for the root `Node` of a `Tree`.
     Root,
@@ -28,14 +31,14 @@ pub enum Operation {
     BlackPoint(f64),
 }
 impl Operation {
-    pub fn apply_to(&self, image: &mut ImageBuffer<Rgba<f32>, Vec<f32>>) {
+    pub fn apply_to(&self, image: &mut WorkingImage) {
         todo!()
     }
 }
 
 /// Defines a 2d point in an image in pixels.
 /// This can also be used to define a size (as in Operation::Crop).
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub struct Point {
     pub x: u32,
     pub y: u32,

@@ -1,8 +1,13 @@
 use image::{ImageBuffer, Rgba};
+use palette::{LinSrgba, Srgba};
+use palette::FromColor;
 use schrod::Schrod::{self, Pass};
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::workspace::operation::Operation;
+
+pub type Buffer = ImageBuffer<Rgba<f32>, Vec<f32>>;
 
 /// Lists the two directions that can be traversed in the `Node` `Tree`.
 pub enum Direction {
@@ -14,8 +19,89 @@ pub enum Direction {
 
 
 
-/// Holds information for an individual `Operation` or step in the edit `Tree`.
+/// Holds two copies of the image being edited.
+/// One copy is for applying operations (`linear_image`) and the other is for displaying (`srgb_image`).
 #[derive(Debug, Clone)]
+pub struct WorkingImage {
+    /// Used for applying operations.
+    linear_image: Buffer,
+    /// Used for displaying.
+    srgb_image: Buffer,
+}
+impl WorkingImage {
+    // general tools
+    /// Converts an SRGB image to a linear image.
+    #[must_use]
+    pub fn srgb_to_linear(srgb_image: &Buffer) -> Buffer {
+        let (w, h) = srgb_image.dimensions();
+        let mut linear_image = ImageBuffer::new(w, h);
+        for (x, y, px) in srgb_image.enumerate_pixels() {
+            let srgba_pixel = Srgba::new(px[0], px[1], px[2], px[3]);
+            let linear_pixel = LinSrgba::from_color(srgba_pixel);
+            linear_image.put_pixel(x, y, Rgba([linear_pixel.red, linear_pixel.green, linear_pixel.blue, linear_pixel.alpha]));
+        }
+        linear_image
+    }
+
+    /// Converts a linear image to an SRGB image.
+    #[must_use]
+    pub fn linear_to_srgb(linear_image: &Buffer) -> Buffer {
+        let (w, h) = linear_image.dimensions();
+        let mut srgb_image = ImageBuffer::new(w, h);
+        for (x, y, px) in linear_image.enumerate_pixels() {
+            let linear_pixel = LinSrgba::new(px[0], px[1], px[2], px[3]);
+            let srgba_pixel = Srgba::from_color(linear_pixel);
+            srgb_image.put_pixel(x, y, Rgba([srgba_pixel.red, srgba_pixel.green, srgba_pixel.blue, srgba_pixel.alpha]));
+        }
+        srgb_image
+    }
+
+
+
+    // initializing
+    /// Returns a new `WorkingImage` from a linear image.
+    #[must_use]
+    pub fn from_linear(linear_image: Buffer) -> WorkingImage {
+        let srgb_image = WorkingImage::linear_to_srgb(&linear_image);
+        WorkingImage { linear_image, srgb_image }
+    }
+
+    /// Returns a new `WorkingImage` from as srgb image.
+    #[must_use]
+    pub fn from_srgb(srgb_image: Buffer) -> WorkingImage {
+        let linear_image = WorkingImage::srgb_to_linear(&srgb_image);
+        WorkingImage { linear_image, srgb_image }
+    }
+
+
+    // basic getters
+    /// Returns a reference to the `linear_image`.
+    #[must_use]
+    pub fn get_linear(&self) -> &Buffer {
+        &self.linear_image
+    }
+
+    /// Returns a reference to the `srgb_image`.
+    #[must_use]
+    pub fn get_srgb(&self) -> &Buffer {
+        &self.srgb_image
+    }
+
+
+
+    // basic editing
+    /// Sets a new `linear_image` and updates the `srgb_image` based on it.
+    pub fn set_linear(&mut self, new_linear_image: Buffer) {
+        let new_srgb_image = WorkingImage::linear_to_srgb(&new_linear_image);
+        self.linear_image = new_linear_image;
+        self.srgb_image = new_srgb_image;
+    }
+}
+
+
+
+/// Holds information for an individual `Operation` or step in the edit `Tree`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
     /// The unique id for this `Node` so it can be identified.
     id: Uuid,
@@ -29,7 +115,8 @@ pub struct Node {
     /// What edit operation is being performed by this `Node`.
     operation: Operation,
     /// A chached image of the project up to this point in the `Tree`.
-    image: Option<ImageBuffer<Rgba<f32>, Vec<f32>>>,
+    #[serde(skip)]
+    image: Option<WorkingImage>,
 }
 impl PartialEq for Node {
     fn eq(&self, other: &Node) -> bool {
@@ -80,7 +167,7 @@ impl Node {
 
     /// Gets the cached image.
     #[must_use]
-    pub fn get_image(&self) -> Option<&ImageBuffer<Rgba<f32>, Vec<f32>>> {
+    pub fn get_image(&self) -> Option<&WorkingImage> {
         match &self.image {
             Some(image) => { Some(image) }
             None => { None }
@@ -128,7 +215,7 @@ impl Node {
     }
 
     /// Sets the image
-    pub fn set_image(&mut self, new_image: Option<ImageBuffer<Rgba<f32>, Vec<f32>>>) {
+    pub fn set_image(&mut self, new_image: Option<WorkingImage>) {
         self.image = new_image;
     }
 }

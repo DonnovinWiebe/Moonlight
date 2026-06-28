@@ -5,7 +5,7 @@ use image::{ImageBuffer, Rgba};
 use schrod::Schrod::{self, Fail, Pass};
 use uuid::Uuid;
 
-use crate::workspace::{node::{Direction::{self, DownStream, UpStream}, Node}, operation::Operation};
+use crate::workspace::{node::{Buffer, Direction::{self, DownStream, UpStream}, Node, WorkingImage}, operation::Operation};
 
 /// Holds all the project data.
 pub struct Tree {
@@ -14,7 +14,7 @@ pub struct Tree {
     source_path: Option<PathBuf>,
     /// The source image being edited.
     /// It is optional since the `Tree` will exist before any image is loaded.
-    source_image: Option<ImageBuffer<Rgba<f32>, Vec<f32>>>,
+    source_image: Option<Buffer>,
     /// An uncategorized and unsorted mass of all 'Node's.
     /// Each node keeps track of its own heredity.
     all_nodes: Vec<Node>,
@@ -73,8 +73,9 @@ impl Tree {
 
         match node.get_image() {
             Some(image) => {
-                let bytes: Vec<u8> = image.as_raw().iter().map(|&v| (v * 255.0).clamp(0.0, 255.0) as u8).collect();
-                Pass(Handle::from_rgba(image.width(), image.height(), bytes))
+                let srgb_image = image.get_srgb();
+                let bytes: Vec<u8> = srgb_image.as_raw().iter().map(|&v| (v * 255.0).clamp(0.0, 255.0) as u8).collect();
+                Pass(Handle::from_rgba(srgb_image.width(), srgb_image.height(), bytes))
             }
             
             None => {
@@ -86,7 +87,7 @@ impl Tree {
         
     /// Gets the source image of the `Tree`.
     #[must_use]
-    fn get_image(&self) -> Option<&ImageBuffer<Rgba<f32>, Vec<f32>>> {
+    fn get_image(&self) -> Option<&Buffer> {
         match &self.source_image {
             Some(image) => { Some(image) }
             None => { None }
@@ -466,7 +467,7 @@ impl Tree {
     /// Gets the cached image for the given `Node`.
     /// If the `Node` has no cached image, a new one is generated.
     #[must_use]
-    pub fn get_image_for(&mut self, node_id: Uuid) -> Schrod<&ImageBuffer<Rgba<f32>, Vec<f32>>> {
+    pub fn get_image_for(&mut self, node_id: Uuid) -> Schrod<&WorkingImage> {
         // updates the image in the given node
         let update_result = self.update_image_for(node_id);
         match update_result {
@@ -521,7 +522,7 @@ impl Tree {
 
     /// Generates a new image for the given `Node`
     #[must_use]
-    fn generate_image_for(&self, node_id: Uuid) -> Schrod<ImageBuffer<Rgba<f32>, Vec<f32>>> {
+    fn generate_image_for(&self, node_id: Uuid) -> Schrod<WorkingImage> {
         // gets the node
         let node_result = self.get(node_id);
         if node_result.is_fail() {
@@ -557,7 +558,7 @@ impl Tree {
             // generates a new image based on the source image of the tree
             None => {
                 if let Some(source_image) = self.get_image() {
-                    let mut new_image = source_image.clone();
+                    let mut new_image = WorkingImage::from_srgb(source_image.clone());
                     node.get_operation().apply_to(&mut new_image);
                     return Pass(new_image)
                 }

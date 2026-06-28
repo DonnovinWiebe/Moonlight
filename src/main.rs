@@ -7,17 +7,15 @@ pub mod processor;
 pub mod state;
 pub mod ui;
 
-fn main() {
+fn main() -> iced::Result {
     // sets the iced backend on linux manually - see below
     #[cfg(target_os = "linux")]
-    if !cook_with_remmy {
-        // there have been some rendering issues on Fedora, and this fixed it
-        unsafe { std::env::set_var("WGPU_BACKEND", "gl"); }
-    }
+    // there have been some rendering issues on Fedora, and this fixed it
+    unsafe { std::env::set_var("WGPU_BACKEND", "gl"); }
 
     // runs the app
     iced::application(App::new, App::update, App::view)
         .theme(App::theme)
         .subscription(App::subscription)
-        .run();
+        .run()
 }

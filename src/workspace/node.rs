@@ -176,7 +176,7 @@ impl Node {
 
 
 
-    // basic setters
+    // basic editing
     /// Sets the `parent_id`.
     pub fn set_parent(&mut self, parent_id: Option<Uuid>) {
         self.parent_id = parent_id;

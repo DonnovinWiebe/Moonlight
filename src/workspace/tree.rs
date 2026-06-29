@@ -547,18 +547,16 @@ impl Tree {
                         .convert("Tree::generate_image_for()")
                         .fail("Failed to generate image.", "Tree::generate_image_for()")
                 }
-                let mut previous_image = previous_image_result.wont_fail("This is past an is_fail() guard clause.", "Tree::generate_image_for()");
+                let previous_image = previous_image_result.wont_fail("This is past an is_fail() guard clause.", "Tree::generate_image_for()");
     
-                node.get_operation().apply_to(&mut previous_image);
-                let new_image = previous_image;
+                let new_image = node.get_operation().applied_to(&previous_image);
                 return Pass(new_image)
             }
             
             // generates a new image based on the source image of the tree
             None => {
                 if let Some(source_image) = self.get_image() {
-                    let mut new_image = WorkingImage::from_srgb(source_image.clone());
-                    node.get_operation().apply_to(&mut new_image);
+                    let new_image = node.get_operation().applied_to(&WorkingImage::from_srgb(source_image.clone()));
                     return Pass(new_image)
                 }
                 else {

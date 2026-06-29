@@ -1,7 +1,11 @@
+use std::str::EscapeUnicode;
+
+use iced::{Pixels, Point, alignment::{self, Vertical}, widget::{canvas::{self, Text}, text::Alignment}};
 use image::{ImageBuffer, Rgba};
+use materialui::{components::{TextSizes, ThemeProvider}, material::{Depths, MaterialColors, Materials}};
 use serde::{Deserialize, Serialize};
 
-use crate::workspace::node::WorkingImage;
+use crate::{FA_SOLID, state::app::App, workspace::node::WorkingImage};
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
 pub enum Operation {
@@ -10,7 +14,7 @@ pub enum Operation {
     /// Rotates an image in degrees.
     Rotate(f64),
     /// Crops an image from the top left corner `Point` at the given size (2nd `Point`).
-    Crop(Point, Point),
+    Crop(Position, Position),
     /// Adjusts the exposure of the image.
     Exposure(f64),
     /// Adjusts the overall brightness of the image.
@@ -31,22 +35,60 @@ pub enum Operation {
     BlackPoint(f64),
 }
 impl Operation {
-    pub fn apply_to(&self, image: &mut WorkingImage) {
-        todo!()
+    /// Returns a new `WorkingImage` with the given `Operation` applied to the given `WorkingImage`.
+    #[must_use]
+    pub fn applied_to(&self, image: &WorkingImage) -> WorkingImage {
+        image.clone()
+    }
+
+    /// Returns an icon for the given `Operation` that can be used with Iced's `canvas`.
+    #[must_use]
+    pub fn canvas_icon(&self, app: &App) -> Text {
+        match self {
+            Operation::Root =>          Operation::canvas_icon_base(app, "\u{f192}".to_string()), // circle-dot
+            Operation::Rotate(_) =>     Operation::canvas_icon_base(app, "\u{f2f1}".to_string()), // rotate
+            Operation::Crop(_, _) =>    Operation::canvas_icon_base(app, "\u{f565}".to_string()), // crop-simple
+            Operation::Exposure(_) =>   Operation::canvas_icon_base(app, "\u{f185}".to_string()), // sun
+            Operation::Brightness(_) => Operation::canvas_icon_base(app, "\u{f0eb}".to_string()), // lightbulb
+            Operation::Contrast(_) =>   Operation::canvas_icon_base(app, "\u{f042}".to_string()), // circle/half/stroke
+            Operation::Whites(_) =>     Operation::canvas_icon_base(app, "\u{57}"  .to_string()), // w
+            Operation::Blacks(_) =>     Operation::canvas_icon_base(app, "\u{42}"  .to_string()), // b
+            Operation::Highlights(_) => Operation::canvas_icon_base(app, "\u{e52f}".to_string()), // mountain-sun
+            Operation::Shadows(_) =>    Operation::canvas_icon_base(app, "\u{f186}".to_string()), // moon
+            Operation::WhitePoint(_) => Operation::canvas_icon_base(app, "\u{f111}".to_string()), // circle
+            Operation::BlackPoint(_) => Operation::canvas_icon_base(app, "\u{f192}".to_string()), // circle-dot
+        }
+    }
+
+    /// A helper function for getting `canvas` compatible icons.
+    #[must_use]
+    fn canvas_icon_base(app: &App, code: String) -> Text {
+        Text {
+            content: code,
+            font: FA_SOLID,
+            size: Pixels(TextSizes::Interactable.size()),
+            position: Point::new(0.0, 0.0),
+            color: MaterialColors::StrongText.materialized(Materials::Plastic, Depths::Flat, false, app.material_theme()),
+            align_x: Alignment::Center,
+            align_y: Vertical::Center,
+            ..canvas::Text::default()
+        }
     }
 }
 
-/// Defines a 2d point in an image in pixels.
+
+
+/// Defines a 2d position in an image in pixels.
 /// This can also be used to define a size (as in Operation::Crop).
 #[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-pub struct Point {
+pub struct Position {
     pub x: u32,
     pub y: u32,
 }
-impl Point {
-    /// Returns a new `Point`.
+impl Position {
+    /// Returns a new `Position`.
     #[must_use]
-    pub fn new(x: u32, y: u32) -> Point {
-        Point { x, y }
+    pub fn new(x: u32, y: u32) -> Position {
+        Position { x, y }
     }
 }

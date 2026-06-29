@@ -2075,6 +2075,7 @@ name = "moonlight"
 version = "0.1.0"
 dependencies = [
  "iced",
+ "iced_font_awesome",
  "image",
  "materialui",
  "palette",

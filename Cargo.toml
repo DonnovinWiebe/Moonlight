@@ -11,3 +11,4 @@ materialui = { git = "https://github.com/DonnovinWiebe/MaterialUI", tag = "1.0.0
 schrod = { git = "https://github.com/DonnovinWiebe/Schrod", tag = "1.0.0" }
 uuid = { version = "1.23.3", features = ["v7", "serde"] }
 serde = "1.0.228"
+iced_font_awesome = "0.4.2"

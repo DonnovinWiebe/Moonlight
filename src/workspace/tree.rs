@@ -59,6 +59,12 @@ impl Tree {
 
     
     // basic getters
+    /// Gets the `root` `Node`.
+    #[must_use]
+    pub fn get_root(&self) -> &Node {
+        &self.root
+    }
+    
     /// Gets a `Handle` that `Iced` can display.
     #[must_use]
     pub fn get_current_handle(&self) -> Schrod<Handle> {
@@ -118,7 +124,7 @@ impl Tree {
     /// Gets all the upstream `Node`s from the given `Node`.
     /// This does not include the given `Node`.
     #[must_use]
-    fn get_all_upstream_nodes(&self, node_id: Uuid) -> Schrod<Vec<Uuid>> {
+    pub fn get_all_upstream_nodes(&self, node_id: Uuid) -> Schrod<Vec<Uuid>> {
         // the lists in use
         let mut current_node_id = node_id;
         let mut all_nodes: Vec<Uuid> = Vec::new();
@@ -149,7 +155,7 @@ impl Tree {
     /// Gets all the downstream `Node`s from the given `Node`.
     /// This does not include the given `Node`.
     #[must_use]
-    fn get_all_downstream_nodes(&self, node_id: Uuid) -> Schrod<Vec<Uuid>> {
+    pub fn get_all_downstream_nodes(&self, node_id: Uuid) -> Schrod<Vec<Uuid>> {
         // the lists in use
         let mut current_nodes: Vec<Uuid> = vec![node_id];
         let mut new_nodes: Vec<Uuid> = Vec::new();
@@ -189,7 +195,7 @@ impl Tree {
     /// Gets all the farthest downstream `Node`s from the given `Node`.
     /// This will include the given `Node` if it is the downstream end point.
     #[must_use]
-    fn get_downstream_end_nodes(&self, node_id: Uuid) -> Schrod<Vec<Uuid>> {
+    pub fn get_downstream_end_nodes(&self, node_id: Uuid) -> Schrod<Vec<Uuid>> {
         // the lists in use
         let mut current_end_points: Vec<Uuid> = vec![node_id];
         let mut new_end_points: Vec<Uuid> = Vec::new();

@@ -28,7 +28,7 @@ impl Tree {
     /// Creates a new `Tree`.
     #[must_use]
     pub fn new() -> Tree {
-        let root = Node::new(None, Uuid::now_v7(), Operation::Root);
+        let root = Node::new_root();
         let root_id = root.get_id();
         
         Tree {
@@ -133,15 +133,13 @@ impl Tree {
                     .fail("Failed to get upstream end nodes.", "Tree::get_all_upstream_nodes()")
             }
             let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Tree::get_all_upstream_nodes()");
-            
 
             // adds the node to the list of all nodes
             if node.get_id() != node_id { all_nodes.push(node.get_id()) }
+            
             // sets the node's parent as the curren node or ends the loop if the top has been found
-            match node.get_parent_id() {
-                Some(parent_id) => { current_node_id = parent_id }
-                None => { break }
-            }
+            if node.is_root() { break; }
+            else { current_node_id = node.get_parent_id() }
         }
         
         // returns the verified end points
@@ -269,7 +267,7 @@ impl Tree {
         };
 
         // creates a new node and gives it all the children
-        let mut new_node = Node::new(Some(position), branch_id, operation);
+        let mut new_node = Node::new(position, branch_id, operation);
         new_node.add_children(children_ids.clone());
 
         // gives all the children the new node for their parent
@@ -281,7 +279,7 @@ impl Tree {
                     .fail("Failed to add node.", "Tree::add_node()")
             }
             let child = child_result.wont_fail("This is past an is_fail() guard clause.", "Tree::add_node()");
-            child.set_parent(Some(new_node.get_id()));
+            child.set_parent(new_node.get_id());
         }
 
         // updates the current position and adds the new node to the tree
@@ -319,7 +317,7 @@ impl Tree {
         let position = self.position;
 
         // creates a new node with a new branch id
-        let new_node = Node::new(Some(position), Uuid::now_v7(), operation);
+        let new_node = Node::new(position, Uuid::now_v7(), operation);
 
         // updates the current position and adds the new node to the tree
         self.position = new_node.get_id();
@@ -400,26 +398,18 @@ impl Tree {
         };
 
         // gives the parent the children ids and removes the given node as a child
-        if let Some(parent_id) = parent_id {
-            let parent_result = self.get_mut(parent_id);
-            if parent_result.is_fail() {
-                return parent_result
-                    .convert("Tree::remove_node()")
-                    .fail("Failed to remove node.", "Tree::remove_node()")
-            }
-            let parent = parent_result.wont_fail("This is past an is_fail() guard clause.", "Tree::remove_node()");
-            parent.add_children(children_ids.clone());
-            let remove_result = parent.remove_child(node_id);
-            if remove_result.is_fail() {
-                return remove_result
-                    .convert("Tree::remove_node()")
-                    .fail("Failed to remove node.", "Tree::remove_node()")
-            }
+        let parent_result = self.get_mut(parent_id);
+        if parent_result.is_fail() {
+            return parent_result
+                .convert("Tree::remove_node()")
+                .fail("Failed to remove node.", "Tree::remove_node()")
         }
-
-        // every node will have a parent except the root will have a parent
-        else {
-            return Schrod::new_fail("Tried to remove a node that has no parent!", "Tree::remove_node()")
+        let parent = parent_result.wont_fail("This is past an is_fail() guard clause.", "Tree::remove_node()");
+        parent.add_children(children_ids.clone());
+        let remove_result = parent.remove_child(node_id);
+        if remove_result.is_fail() {
+            return remove_result
+                .convert("Tree::remove_node()")
                 .fail("Failed to remove node.", "Tree::remove_node()")
         }
 
@@ -436,15 +426,7 @@ impl Tree {
         }
 
         // moves the tree's position if it is set to the node being removed
-        if self.position == node_id {
-            if let Some(parent_id) = parent_id { self.position = parent_id; }
-            
-            // every node will have a parent except the root will have a parent
-            else {
-                return Schrod::new_fail("Tried to remove a node that has no parent!", "Tree::remove_node()")
-                    .fail("Failed to remove node.", "Tree::remove_node()")
-            }
-        }
+        if self.position == node_id { self.position = parent_id; }
 
         // removing the node
         self.all_nodes.retain(|existing_node| existing_node.get_id() !=  node_id);
@@ -538,32 +520,30 @@ impl Tree {
         */
 
         // checks if this node has a parent
-        match node.get_parent_id() {
-            // generates a new image based on this node's parent
-            Some(parent_id) => {
-                let previous_image_result =  self.generate_image_for(parent_id);
-                if previous_image_result.is_fail() {
-                    return previous_image_result
-                        .convert("Tree::generate_image_for()")
-                        .fail("Failed to generate image.", "Tree::generate_image_for()")
-                }
-                let previous_image = previous_image_result.wont_fail("This is past an is_fail() guard clause.", "Tree::generate_image_for()");
-    
-                let new_image = node.get_operation().applied_to(&previous_image);
+        // generates a new image based on the source image of the tree
+        if node.is_root() {
+            if let Some(source_image) = self.get_image() {
+                let new_image = node.get_operation().applied_to(&WorkingImage::from_srgb(source_image.clone()));
                 return Pass(new_image)
             }
-            
-            // generates a new image based on the source image of the tree
-            None => {
-                if let Some(source_image) = self.get_image() {
-                    let new_image = node.get_operation().applied_to(&WorkingImage::from_srgb(source_image.clone()));
-                    return Pass(new_image)
-                }
-                else {
-                    return Schrod::new_fail("No source image found!", "Tree::generate_image_for()")
-                        .fail("Failed to generate image.", "Tree::generate_image_for()")
-                }
+            else {
+                return Schrod::new_fail("No source image found!", "Tree::generate_image_for()")
+                    .fail("Failed to generate image.", "Tree::generate_image_for()")
             }
+        }
+        
+        // generates a new image based on this node's parent
+        else {
+            let previous_image_result =  self.generate_image_for(node.get_parent_id());
+            if previous_image_result.is_fail() {
+                return previous_image_result
+                    .convert("Tree::generate_image_for()")
+                    .fail("Failed to generate image.", "Tree::generate_image_for()")
+            }
+            let previous_image = previous_image_result.wont_fail("This is past an is_fail() guard clause.", "Tree::generate_image_for()");
+
+            let new_image = node.get_operation().applied_to(&previous_image);
+            return Pass(new_image)
         }
     }
     

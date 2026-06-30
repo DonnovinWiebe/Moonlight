@@ -113,8 +113,8 @@ pub struct Node {
     /// Identifies which branch this `Node` lives in.
     branch_id: Uuid,
     /// holds the parent of this `Node`.
-    /// This will only be `None` for the `root` in the `Tree`.
-    parent_id: Option<Uuid>,
+    /// The `root` in the `Tree` will have itself as a parent.
+    parent_id: Uuid,
     /// Holds the children of this `Node`.
     children_ids: Vec<Uuid>,
     /// What edit operation is being performed by this `Node`.
@@ -132,7 +132,7 @@ impl Node {
     // initializing
     /// Creates a new `Node`.
     #[must_use]
-    pub fn new(parent_id: Option<Uuid>, branch_id: Uuid, operation: Operation) -> Node {
+    pub fn new(parent_id: Uuid, branch_id: Uuid, operation: Operation) -> Node {
         Node {
             id: Uuid::now_v7(),
             branch_id,
@@ -142,10 +142,31 @@ impl Node {
             image: None,
         }
     }
+    
+    /// Creates a new `root` `Node`.
+    /// This is different function since it needs to reference itself as a parent.
+    #[must_use]
+    pub fn new_root() -> Node {
+        let id = Uuid::now_v7();
+        let branch_id = Uuid::now_v7();
+        
+        Node {
+            id,
+            branch_id,
+            parent_id: id,
+            children_ids: Vec::new(),
+            operation: Operation::Root,
+            image: None,
+        }
+    }
 
 
     
     // basic getters
+    /// Checks if the given `Node` is the `root` `Node`.
+    #[must_use]
+    pub fn is_root(&self) -> bool { self.id == self.parent_id }
+    
     /// Gets the `id`.
     #[must_use]
     pub fn get_id(&self) -> Uuid { self.id }
@@ -154,9 +175,9 @@ impl Node {
     #[must_use]
     pub fn get_branch_id(&self) -> Uuid { self.branch_id }
     
-    /// Gets the optional `parent_id`.
+    /// Gets the `parent_id`.
     #[must_use]
-    pub fn get_parent_id(&self) -> Option<Uuid> { self.parent_id }
+    pub fn get_parent_id(&self) -> Uuid { self.parent_id }
 
     /// Checks if this `Node` has at least one child.
     #[must_use]
@@ -183,7 +204,7 @@ impl Node {
 
     // basic editing
     /// Sets the `parent_id`.
-    pub fn set_parent(&mut self, parent_id: Option<Uuid>) {
+    pub fn set_parent(&mut self, parent_id: Uuid) {
         self.parent_id = parent_id;
     }
 

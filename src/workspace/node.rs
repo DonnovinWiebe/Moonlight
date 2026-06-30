@@ -190,6 +190,7 @@ impl Node {
                     .fail("Failed to get other downstream branches.", "Node::get_other_downstream_branches()")
             }
             let child = child_result.wont_fail("This is past an is_fail() guard clause.", "Node::get_other_downstream_branches()");
+            
             let child_branch = child.get_branch_id();
             if child_branch != self.branch_id { other_branches.push(child_branch); }
         }

@@ -1,7 +1,7 @@
 use iced::Point;
 use iced::widget::canvas::{Fill, Frame, Path};
 use image::{ImageBuffer, Rgba};
-use materialui::components::{TextSizes, ThemeProvider};
+use materialui::components::ThemeProvider;
 use materialui::material::{Depths, MaterialColors, Materials};
 use palette::{LinSrgba, Srgba};
 use palette::FromColor;

@@ -11,6 +11,7 @@ use uuid::Uuid;
 
 use crate::state::app::App;
 use crate::workspace::operation::Operation;
+use crate::workspace::tree::Tree;
 
 pub type Buffer = ImageBuffer<Rgba<f32>, Vec<f32>>;
 
@@ -174,6 +175,27 @@ impl Node {
     /// Gets the `branch_id`.
     #[must_use]
     pub fn get_branch_id(&self) -> Uuid { self.branch_id }
+
+    /// Gets a list of branches originating from the given `Node`.
+    /// The `Node`'s own branch is omitted.
+    #[must_use]
+    pub fn get_other_downstream_branches(&self, tree: &Tree) -> Schrod<Vec<Uuid>> {
+        let mut other_branches = Vec::new();
+        
+        for child_id in &self.children_ids {
+            let child_result = tree.get(*child_id);
+            if child_result.is_fail() {
+                return child_result
+                    .convert("Node::get_other_downstream_branches()")
+                    .fail("Failed to get other downstream branches.", "Node::get_other_downstream_branches()")
+            }
+            let child = child_result.wont_fail("This is past an is_fail() guard clause.", "Node::get_other_downstream_branches()");
+            let child_branch = child.get_branch_id();
+            if child_branch != self.branch_id { other_branches.push(child_branch); }
+        }
+
+        Pass(other_branches)
+    }
     
     /// Gets the `parent_id`.
     #[must_use]

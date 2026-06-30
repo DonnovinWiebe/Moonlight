@@ -248,22 +248,22 @@ impl Node {
 
 
     // drawing
-    /// The size of the `Node` in the `Map`.
+    /// The size of the `Node` in the visual tree.
     const NODE_SIZE: f32 = Node::NODE_SYMBOL_SIZE + (2.0 * Node::NODE_INNER_PADDING);
     
-    /// The size of the `Operation` symbol in the `Map`.
+    /// The size of the `Operation` symbol in the visual tree.
     const NODE_SYMBOL_SIZE: f32 = 16.0;
     
-    /// How much space there is between the `Node`'s symbol and outer edges in the `Map`.
+    /// How much space there is between the `Node`'s symbol and outer edges in the visual tree.
     const NODE_INNER_PADDING: f32 = 8.0;
     
-    /// How round the `Node`'s corners are in the `Map`.
+    /// How round the `Node`'s corners are in the visual tree.
     const NODE_CORNER_RADIUS: f32 = 4.0;
     
-    /// The length of the straight sections in the `Node`'s outer edges in the `Map`.
+    /// The length of the straight sections in the `Node`'s outer edges in the visual tree.
     const NODE_STRAIGH_WALL_LENGTH: f32 = Node::NODE_SIZE - (2.0 * Node::NODE_CORNER_RADIUS);
     
-    /// The space between `Node`s in the `Map`.
+    /// The space between `Node`s in the visual tree.
     const NODE_SPACING: f32 = Node::NODE_SIZE * 2.0;
     
     /// Draws the given `Node` in `Map`.

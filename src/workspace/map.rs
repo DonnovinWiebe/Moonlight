@@ -8,16 +8,7 @@ pub struct Map<'a> {
     branch_maps: Vec<BranchMap<'a>>,
 }
 impl<'a> Map<'a> {
-    pub fn new(tree: &'a Tree) -> Schrod<()> {
-        // gets the branch maps
-        let branch_maps_result = BranchMap::build_branch_maps(tree);
-        if branch_maps_result.is_fail() {
-            return branch_maps_result
-                .convert("Map::new()")
-                .fail("Failed to create Map.", "Map::new()")
-        }
-        let branch_maps = branch_maps_result.wont_fail("This is past an is_fail() guard clause.", "Map::new()");
-
+    pub fn assemble_nodules(tree: &'a Tree, branch_maps: Vec<BranchMap<'a>>) -> Schrod<()> {
         // gets the root branch map
         let mut root_branch_map_result = None;
         for branch_map in &branch_maps {
@@ -155,6 +146,13 @@ impl<'a> BranchMap<'a> {
         Pass(branch_maps)
     }
 
+    /// Updates all the `Nodule` positions to be relative to the `Nodule` it branches off from.
+    pub fn set_branch_attachment(&mut self, source_nodule: &Nodule) {
+        let base_x = source_nodule.get_x() + 1;
+        let base_y = source_nodule.get_y() + 1;
+        for nodule in &mut self.nodules { nodule.add_position_offset(base_x, base_y); }
+    }
+
 
 
     // basic getters
@@ -200,6 +198,12 @@ impl<'a> Nodule<'a> {
 
 
     // basic editing
+    /// Adds a position offset.
+    pub fn add_position_offset(&mut self, offset_x: u8, offset_y: u8) {
+        self.x += offset_x;
+        self.y += offset_y;
+    }
+    
     /// Sets the `x` position.
     pub fn set_x(&mut self, new_x: u8) { self.x = new_x }
 

@@ -158,7 +158,7 @@ impl<'a> BranchMap<'a> {
     // basic getters
     /// Gets the branch id of the `BranchMap`.
     #[must_use]
-    pub fn get_branch_id(&self) -> Uuid { self.nodules[0].node.get_branch_id() }
+    pub fn get_branch_id(&self) -> Uuid { self.nodules[0].get_node().get_branch_id() }
 }
 
 
@@ -187,6 +187,9 @@ impl<'a> Nodule<'a> {
 
     
     // basic getters
+    /// Gets the `Node`.
+    pub fn get_node(&self) -> &Node { &self.node }
+    
     /// Gets the `x` position.
     #[must_use]
     pub fn get_x(&self) -> u8 { self.x }

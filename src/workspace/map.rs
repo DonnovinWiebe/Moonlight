@@ -199,7 +199,6 @@ impl<'a> Nodule<'a> {
 
 
 
-
     // basic editing
     /// Sets the `x` position.
     pub fn set_x(&mut self, new_x: u8) { self.x = new_x }

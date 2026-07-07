@@ -2003,7 +2003,8 @@ dependencies = [
 [[package]]
 name = "materialui"
 version = "1.0.0"
-source = "git+https://github.com/DonnovinWiebe/MaterialUI?tag=1.0.0#dd265c9277d94f811767833f67e53bcb095e9bdd"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22435328095d6925811f52fb89e077729a277d3db9b309a5b3318b2295b13d72"
 dependencies = [
  "iced",
  "iced_font_awesome",
@@ -3280,7 +3281,8 @@ dependencies = [
 [[package]]
 name = "schrod"
 version = "1.0.0"
-source = "git+https://github.com/DonnovinWiebe/Schrod?tag=1.0.0#cc4ab07df272cce75c802b3ad5c77e7d4a67ff11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b13c1005d014b797963f32e7df5cd4b4c05ac398a62a48af2cbab7176d3f46d9"
 
 [[package]]
 name = "scoped-tls"

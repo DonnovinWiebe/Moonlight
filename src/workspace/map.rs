@@ -1,45 +1,95 @@
-use iced::{Point};
+use iced::Point;
 use schrod::Schrod::{self, Pass};
 use uuid::Uuid;
 
 use crate::workspace::{node::Node, tree::Tree};
 
 pub struct Map<'a> {
-    branch_maps: Vec<BranchMap<'a>>,
+    nodules: Vec<Nodule<'a>>,
 }
 impl<'a> Map<'a> {
-    pub fn assemble_nodules(tree: &'a Tree, branch_maps: Vec<BranchMap<'a>>) -> Schrod<()> {
-        // gets the root branch map
-        let mut root_branch_map_result = None;
-        for branch_map in &branch_maps {
-            if branch_map.get_branch_id() == tree.get_root().get_branch_id() { root_branch_map_result = Some(branch_map); }
-        }
-        let root_branch_map_result = Schrod::from_option(root_branch_map_result, "Failed to find the root's branch to start assembling!", "Map::new()");
-        if root_branch_map_result.is_fail() {
-            return root_branch_map_result
-                .convert("Map::new()")
-                .fail("Failed to create Map.", "Map::new()")
-        }
-        let root_branch_map = root_branch_map_result.wont_fail("This is past an is_fail() guard clause.", "Map::new()");
+    pub fn assemble_nodules(tree: &'a Tree, mut branch_maps: Vec<BranchMap<'a>>) -> Schrod<Vec<Nodule<'a>>> {
+        // the nodules that have been positioned
+        let mut mapped_nodules: Vec<Nodule<'a>> = Vec::new();
+        // the current x position of brances so they do not overlap
+        let mut current_branch_x = 0;
+        // the root branch id
+        let root_branch_id = tree.get_root().get_branch_id();
+        // the queue of branches being explored
+        let mut current_branch_ids = vec![root_branch_id];
+        // the branches that have been seen/worked with
+        // this is used to determine if the given branch needs to have its nodules shifted to the side (x offset)
+        let mut branches_touched = vec![root_branch_id];
 
-        // starts assembling the branch maps into an overall node grid
-        for node in &root_branch_map.nodules {
+        loop {
+            // ends the loop if there are no more branched to explore
+            if current_branch_ids.is_empty() { break; }
+
+            // gets the current branch map
+            let current_branch_map_result = 'block: {
+                for map in &mut branch_maps {
+                    if map.get_branch_id() == current_branch_ids[current_branch_ids.len() - 1] { break 'block Some(map) }
+                }
+                None
+            };
+            if current_branch_map_result.is_none() {
+                return Schrod::from_option(current_branch_map_result, "Failed to find current Branch Map!", "Map::assemble_nodules()")
+                    .convert("Map::assemble_nodules()")
+                    .fail("Failed to assemble Nodules.", "Map::assemble_nodules()")
+            }
+            let current_branch_map = current_branch_map_result.expect("This is past an is_none() guard clause.");
             
+            // updates the y position of all nodules in the current branch map if it has not been worked with up to this point
+            if !branches_touched.contains(&current_branch_ids[current_branch_ids.len() - 1]) {
+                current_branch_x += 1;
+                branches_touched.push(current_branch_ids[current_branch_ids.len() - 1]);
+                for nodule in current_branch_map.get_nodules_mut() { nodule.add_position_offset(current_branch_x, 0); }
+            }
+
+            // checks if the current branch has a new node to explore
+            let current_nodule_result = current_branch_map.get_next_nodule();
+            match current_nodule_result {
+                // places the next nodule into the map
+                Some(nodule) => {
+                    // gets any new downstream branches
+                    let downstream_branches_result = nodule.get_node().get_other_downstream_branches(tree);
+                    if downstream_branches_result.is_fail() {
+                        return downstream_branches_result
+                            .convert("Map::assemble_nodules()")
+                            .fail("Failed to assemble Nodules.", "Map::assemble_nodules()")
+                    }
+                    let downstream_branche_ids = downstream_branches_result.wont_fail("This is past an is_fail() guard clause.", "Map::assemble_nodules()");
+
+                    // adds new branches to the queue
+                    current_branch_ids.extend(downstream_branche_ids);
+
+                    // adds the current nodule to the mapped nodules
+                    mapped_nodules.push(nodule);
+                }
+
+                // removes the current branch from the queue if it has no more nodules to explore
+                None => {
+                    current_branch_ids.remove(current_branch_ids.len() - 1);
+                }
+            }
         }
 
-
-        
-        Pass(())
+        // returns the mapped nodules
+        Pass(mapped_nodules)
     }
 }
 
 
 
+#[derive(Debug, Clone)]
 pub struct BranchMap<'a> {
     /// The list of `Nodule`s that make up the `BranchMap`.
     /// The first `Node`/`Nodule` is the end point in its corresponding branch and the
     /// last `Node`/`Nodule` is the base of the branch.
-    nodules: Vec<Nodule<'a>>
+    nodules: Vec<Nodule<'a>>,
+    /// Tracks the index of the next 'Nodule' being explored when assembling 'Nodule's
+    /// into the final `Map`.
+    next_nodule: usize,
 }
 impl<'a> BranchMap<'a> {
     // initializing
@@ -47,11 +97,11 @@ impl<'a> BranchMap<'a> {
     #[must_use]
     pub fn new(node: &'a Node) -> BranchMap<'a> {
         let first_nodule = Nodule::new(node, 0);
-        BranchMap { nodules: vec![first_nodule] }
+        BranchMap { nodules: vec![first_nodule], next_nodule: 0 }
     }
 
 
-
+    
     // building
     /// Adds a new `Node` to the `BranchMap` upstream of last `Node`.
     pub fn add_node_upstream(&mut self, node: &'a Node) {
@@ -156,14 +206,37 @@ impl<'a> BranchMap<'a> {
 
 
     // basic getters
+    /// Gets an immutable reference to the `Nodule`s.
+    #[must_use]
+    pub fn get_nodules(&self) -> &Vec<Nodule<'a>> { &self.nodules }
+    
+    /// Gets a mutable reference to the `Nodule`s.
+    #[must_use]
+    pub fn get_nodules_mut(&mut self) -> &mut Vec<Nodule<'a>> { &mut self.nodules }
+    
     /// Gets the branch id of the `BranchMap`.
     #[must_use]
     pub fn get_branch_id(&self) -> Uuid { self.nodules[0].get_node().get_branch_id() }
+
+
+
+    // parsing
+    /// Gets the next `Nodule` being explored when assembling all `Nodule`s into a `Map`.
+    #[must_use]
+    pub fn get_next_nodule(&mut self) -> Option<Nodule<'a>> {
+        if self.next_nodule < self.nodules.len() - 1 {
+            let nodule = self.nodules[self.next_nodule].clone();
+            self.next_nodule += 1;
+            Some(nodule)
+        }
+        else { None }
+    }
 }
 
 
 
 /// Holds a reference to a `Node` and it's position relative to other `Node`s/`Nodule`s.
+#[derive(Debug, Clone)]
 pub struct Nodule<'a> {
     /// The `Node` being referenced.
     node: &'a Node,

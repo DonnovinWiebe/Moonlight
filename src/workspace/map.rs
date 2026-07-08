@@ -8,7 +8,30 @@ pub struct Map<'a> {
     nodules: Vec<Nodule<'a>>,
 }
 impl<'a> Map<'a> {
-    pub fn assemble_nodules(tree: &'a Tree, mut branch_maps: Vec<BranchMap<'a>>) -> Schrod<Vec<Nodule<'a>>> {
+    // initializing
+    /// Creates a new `Map`.
+    pub fn new(tree: &'a Tree) -> Schrod<Map<'a>> {
+        let branch_maps_result = BranchMap::build_branch_maps(tree);
+        if branch_maps_result.is_fail() {
+            return branch_maps_result
+                .convert("Map::new()")
+                .fail("Failed to create new Map.", "Map::new()");
+        }
+        let branch_maps = branch_maps_result.wont_fail("This is past an is_fail() guard clause.", "Map::new()");
+
+        let assembled_nodules_result = Map::assemble_nodules(tree, branch_maps);
+        if assembled_nodules_result.is_fail() {
+            return assembled_nodules_result
+                .convert("Map::new()")
+                .fail("Failed to create new Map.", "Map::new()");
+        }
+        let assembled_nodules = assembled_nodules_result.wont_fail("This is past an is_fail() guard clause.", "Map::new()");
+
+        Pass(Map { nodules: assembled_nodules })
+    }
+    
+    /// Assembles a list of `BranchMap`s into a collection of positioned `Nodule`s.
+    fn assemble_nodules(tree: &'a Tree, mut branch_maps: Vec<BranchMap<'a>>) -> Schrod<Vec<Nodule<'a>>> {
         // the nodules that have been positioned
         let mut mapped_nodules: Vec<Nodule<'a>> = Vec::new();
         // the current x position of brances so they do not overlap
@@ -88,8 +111,10 @@ impl<'a> Map<'a> {
 
 
 
+/// Holds the `Nodule`s that make up a branch in the `Tree`.
+/// This is only used while constructing a `Map`.
 #[derive(Debug, Clone)]
-pub struct BranchMap<'a> {
+struct BranchMap<'a> {
     /// The list of `Nodule`s that make up the `BranchMap`.
     /// The first `Node`/`Nodule` is the end point in its corresponding branch and the
     /// last `Node`/`Nodule` is the base of the branch.
@@ -99,27 +124,10 @@ pub struct BranchMap<'a> {
     next_nodule: usize,
 }
 impl<'a> BranchMap<'a> {
-    // initializing
-    /// Creates a new `BranchMap`.
-    #[must_use]
-    pub fn new(node: &'a Node) -> BranchMap<'a> {
-        let first_nodule = Nodule::new(node, 0);
-        BranchMap { nodules: vec![first_nodule], next_nodule: 0 }
-    }
-
-
-    
     // building
-    /// Adds a new `Node` to the `BranchMap` upstream of last `Node`.
-    pub fn add_node_upstream(&mut self, node: &'a Node) {
-        let last_y = self.nodules[self.nodules.len() - 1].get_y();
-        let new_nodule = Nodule::new(node, last_y + 1);
-        self.nodules.push(new_nodule);
-    }
-
     /// Builds a collection `BranchMap`s from the given `Tree`.
     #[must_use]
-    pub fn build_branch_maps(tree: &'a Tree) -> Schrod<Vec<BranchMap<'a>>> {
+    fn build_branch_maps(tree: &'a Tree) -> Schrod<Vec<BranchMap<'a>>> {
         // gets the end point nodes
         let end_point_ids_result = tree.get_all_downstream_nodes(tree.get_root().get_id());
         if end_point_ids_result.is_fail() {
@@ -202,35 +210,50 @@ impl<'a> BranchMap<'a> {
         // returns the branch maps
         Pass(branch_maps)
     }
+    
+    /// Creates a new `BranchMap`.
+    /// This is only used in building a collection of `BranchMap`s from a given `Tree`.
+    #[must_use]
+    fn new(node: &'a Node) -> BranchMap<'a> {
+        let first_nodule = Nodule::new(node, 0);
+        BranchMap { nodules: vec![first_nodule], next_nodule: 0 }
+    }
+    
+    /// Adds a new `Node` to the `BranchMap` upstream of last `Node`.
+    fn add_node_upstream(&mut self, node: &'a Node) {
+        let last_y = self.nodules[self.nodules.len() - 1].get_y();
+        let new_nodule = Nodule::new(node, last_y + 1);
+        self.nodules.push(new_nodule);
+    }
 
     /// Updates all the `Nodule` positions to be relative to the `Nodule` it branches off from.
-    pub fn set_branch_attachment(&mut self, source_nodule: &Nodule) {
+    fn set_branch_attachment(&mut self, source_nodule: &Nodule) {
         let base_x = source_nodule.get_x() + 1;
         let base_y = source_nodule.get_y() + 1;
         for nodule in &mut self.nodules { nodule.add_position_offset(base_x, base_y); }
     }
-
+    
 
 
     // basic getters
     /// Gets an immutable reference to the `Nodule`s.
     #[must_use]
-    pub fn get_nodules(&self) -> &Vec<Nodule<'a>> { &self.nodules }
+    fn get_nodules(&self) -> &Vec<Nodule<'a>> { &self.nodules }
     
     /// Gets a mutable reference to the `Nodule`s.
     #[must_use]
-    pub fn get_nodules_mut(&mut self) -> &mut Vec<Nodule<'a>> { &mut self.nodules }
+    fn get_nodules_mut(&mut self) -> &mut Vec<Nodule<'a>> { &mut self.nodules }
     
     /// Gets the branch id of the `BranchMap`.
     #[must_use]
-    pub fn get_branch_id(&self) -> Uuid { self.nodules[0].get_node().get_branch_id() }
+    fn get_branch_id(&self) -> Uuid { self.nodules[0].get_node().get_branch_id() }
 
 
 
     // parsing
     /// Gets the next `Nodule` being explored when assembling all `Nodule`s into a `Map`.
     #[must_use]
-    pub fn get_next_nodule(&mut self) -> Option<Nodule<'a>> {
+    fn get_next_nodule(&mut self) -> Option<Nodule<'a>> {
         if self.next_nodule < self.nodules.len() - 1 {
             let nodule = self.nodules[self.next_nodule].clone();
             self.next_nodule += 1;
@@ -244,7 +267,7 @@ impl<'a> BranchMap<'a> {
 
 /// Holds a reference to a `Node` and it's position relative to other `Node`s/`Nodule`s.
 #[derive(Debug, Clone)]
-pub struct Nodule<'a> {
+struct Nodule<'a> {
     /// The `Node` being referenced.
     node: &'a Node,
     ///How far out sideways this branch is visually.
@@ -260,7 +283,7 @@ impl<'a> Nodule<'a> {
     /// Then when all the `BranchMap`s are combined the positions are updated to be relative to
     /// the same overall grid/map.
     #[must_use]
-    pub fn new(node: &'a Node, y: u8) -> Nodule {
+    fn new(node: &'a Node, y: u8) -> Nodule<'a> {
         Nodule { node, x: 0, y }
     }
 
@@ -268,28 +291,28 @@ impl<'a> Nodule<'a> {
     
     // basic getters
     /// Gets the `Node`.
-    pub fn get_node(&self) -> &Node { &self.node }
+    fn get_node(&self) -> &Node { &self.node }
     
     /// Gets the `x` position.
     #[must_use]
-    pub fn get_x(&self) -> u8 { self.x }
+    fn get_x(&self) -> u8 { self.x }
 
     /// Gets the `y` position.
     #[must_use]
-    pub fn get_y(&self) -> u8 { self.y }
+    fn get_y(&self) -> u8 { self.y }
 
 
 
     // basic editing
     /// Adds a position offset.
-    pub fn add_position_offset(&mut self, offset_x: u8, offset_y: u8) {
+    fn add_position_offset(&mut self, offset_x: u8, offset_y: u8) {
         self.x += offset_x;
         self.y += offset_y;
     }
     
     /// Sets the `x` position.
-    pub fn set_x(&mut self, new_x: u8) { self.x = new_x }
+    fn set_x(&mut self, new_x: u8) { self.x = new_x }
 
     /// Sets the `y` position.
-    pub fn set_y(&mut self, new_y: u8) { self.y = new_y }
+    fn set_y(&mut self, new_y: u8) { self.y = new_y }
 }

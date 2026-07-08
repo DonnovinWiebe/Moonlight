@@ -13,6 +13,9 @@ impl<'a> Map<'a> {
         let mut mapped_nodules: Vec<Nodule<'a>> = Vec::new();
         // the current x position of brances so they do not overlap
         let mut current_branch_x = 0;
+        // tracks how far down the tree the last nodule was in order to properly offset the
+        // nodules in newly discovered branches
+        let mut last_nodule_y = 0;
         // the root branch id
         let root_branch_id = tree.get_root().get_branch_id();
         // the queue of branches being explored
@@ -21,6 +24,7 @@ impl<'a> Map<'a> {
         // this is used to determine if the given branch needs to have its nodules shifted to the side (x offset)
         let mut branches_touched = vec![root_branch_id];
 
+        // loops until all nodules have been examined
         loop {
             // ends the loop if there are no more branched to explore
             if current_branch_ids.is_empty() { break; }
@@ -43,7 +47,7 @@ impl<'a> Map<'a> {
             if !branches_touched.contains(&current_branch_ids[current_branch_ids.len() - 1]) {
                 current_branch_x += 1;
                 branches_touched.push(current_branch_ids[current_branch_ids.len() - 1]);
-                for nodule in current_branch_map.get_nodules_mut() { nodule.add_position_offset(current_branch_x, 0); }
+                for nodule in current_branch_map.get_nodules_mut() { nodule.add_position_offset(current_branch_x, last_nodule_y); }
             }
 
             // checks if the current branch has a new node to explore
@@ -51,6 +55,9 @@ impl<'a> Map<'a> {
             match current_nodule_result {
                 // places the next nodule into the map
                 Some(nodule) => {
+                    // updates the last y
+                    last_nodule_y = nodule.get_y();
+                    
                     // gets any new downstream branches
                     let downstream_branches_result = nodule.get_node().get_other_downstream_branches(tree);
                     if downstream_branches_result.is_fail() {

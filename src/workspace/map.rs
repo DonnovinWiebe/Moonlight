@@ -11,6 +11,7 @@ impl<'a> Map<'a> {
     // initializing
     /// Creates a new `Map`.
     pub fn new(tree: &'a Tree) -> Schrod<Map<'a>> {
+        // builds individual branch maps
         let branch_maps_result = BranchMap::build_branch_maps(tree);
         if branch_maps_result.is_fail() {
             return branch_maps_result
@@ -19,6 +20,7 @@ impl<'a> Map<'a> {
         }
         let branch_maps = branch_maps_result.wont_fail("This is past an is_fail() guard clause.", "Map::new()");
 
+        // assembles the nodules from the branch maps
         let assembled_nodules_result = Map::assemble_nodules(tree, branch_maps);
         if assembled_nodules_result.is_fail() {
             return assembled_nodules_result
@@ -27,6 +29,7 @@ impl<'a> Map<'a> {
         }
         let assembled_nodules = assembled_nodules_result.wont_fail("This is past an is_fail() guard clause.", "Map::new()");
 
+        // returns a new Map
         Pass(Map { nodules: assembled_nodules })
     }
     

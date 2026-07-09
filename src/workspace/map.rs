@@ -1,19 +1,20 @@
 use iced::widget::canvas::{Fill, Frame, Path};
 use iced::{Point};
+use materialui::material::MaterialThemes;
 use materialui::{components::ThemeProvider, material::{Depths, MaterialColors, Materials}};
 use schrod::Schrod::{self, Pass};
 use uuid::Uuid;
 
 use crate::{state::app::App, workspace::{node::Node, tree::Tree}};
 
-pub struct Map<'a> {
-    nodules: Vec<Nodule<'a>>,
+pub struct Map {
+    nodules: Vec<Nodule>,
 }
-impl<'a> Map<'a> {
+impl Map {
     // initializing
     /// Creates a new `Map`.
     #[must_use]
-    pub fn new(tree: &'a Tree) -> Schrod<Map<'a>> {
+    pub fn new(tree: &Tree) -> Schrod<Map> {
         // builds individual branch maps
         let branch_maps_result = BranchMap::build_branch_maps(tree);
         if branch_maps_result.is_fail() {
@@ -38,9 +39,9 @@ impl<'a> Map<'a> {
     
     /// Assembles a list of `BranchMap`s into a collection of positioned `Nodule`s.
     #[must_use]
-    fn assemble_nodules(tree: &'a Tree, mut branch_maps: Vec<BranchMap<'a>>) -> Schrod<Vec<Nodule<'a>>> {
+    fn assemble_nodules(tree: &Tree, mut branch_maps: Vec<BranchMap>) -> Schrod<Vec<Nodule>> {
         // the nodules that have been positioned
-        let mut mapped_nodules: Vec<Nodule<'a>> = Vec::new();
+        let mut mapped_nodules: Vec<Nodule> = Vec::new();
         // the current x position of brances so they do not overlap
         let mut current_branch_x = 0;
         // tracks how far down the tree the last nodule was in order to properly offset the
@@ -62,7 +63,17 @@ impl<'a> Map<'a> {
             // gets the current branch map
             let current_branch_map_result = 'block: {
                 for map in &mut branch_maps {
-                    if map.get_branch_id() == current_branch_ids[current_branch_ids.len() - 1] { break 'block Some(map) }
+                    // gets the branch id
+                    let branch_map_branch_id_result = map.get_branch_id(tree);
+                    if branch_map_branch_id_result.is_fail() {
+                        return branch_map_branch_id_result
+                            .convert("BranchMap::build_branch_maps()")
+                            .fail("Failed to create BranchMap.", "BranchMap::build_branch_maps()")
+                    }
+                    let branch_map_branch_id = branch_map_branch_id_result.wont_fail("This is past an is_fail() guard clause.", "BranchMap::build_branch_maps()");
+
+                    // checks if this is the right branch map
+                    if branch_map_branch_id == current_branch_ids[current_branch_ids.len() - 1] { break 'block Some(map) }
                 }
                 None
             };
@@ -87,9 +98,18 @@ impl<'a> Map<'a> {
                 Some(nodule) => {
                     // updates the last y
                     last_nodule_y = nodule.get_y();
+
+                    // gets the node
+                    let node_result = tree.get(nodule.get_node_id());
+                    if node_result.is_fail() {
+                        return node_result
+                            .convert("Map::assemble_nodules()")
+                            .fail("Failed to assemble Nodules.", "Map::assemble_nodules()")
+                    }
+                    let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Map::assemble_nodules()");
                     
                     // gets any new downstream branches
-                    let downstream_branches_result = nodule.get_node().get_other_downstream_branches(tree);
+                    let downstream_branches_result = node.get_other_downstream_branches(tree);
                     if downstream_branches_result.is_fail() {
                         return downstream_branches_result
                             .convert("Map::assemble_nodules()")
@@ -144,20 +164,20 @@ impl<'a> Map<'a> {
 /// Holds the `Nodule`s that make up a branch in the `Tree`.
 /// This is only used while constructing a `Map`.
 #[derive(Debug, Clone)]
-struct BranchMap<'a> {
+struct BranchMap {
     /// The list of `Nodule`s that make up the `BranchMap`.
     /// The first `Node`/`Nodule` is the end point in its corresponding branch and the
     /// last `Node`/`Nodule` is the base of the branch.
-    nodules: Vec<Nodule<'a>>,
+    nodules: Vec<Nodule>,
     /// Tracks the index of the next 'Nodule' being explored when assembling 'Nodule's
     /// into the final `Map`.
     next_nodule: usize,
 }
-impl<'a> BranchMap<'a> {
+impl BranchMap {
     // building
     /// Builds a collection `BranchMap`s from the given `Tree`.
     #[must_use]
-    fn build_branch_maps(tree: &'a Tree) -> Schrod<Vec<BranchMap<'a>>> {
+    fn build_branch_maps(tree: &Tree) -> Schrod<Vec<BranchMap>> {
         // gets the end point nodes
         let end_point_ids_result = tree.get_all_downstream_nodes(tree.get_root().get_id());
         if end_point_ids_result.is_fail() {
@@ -171,7 +191,7 @@ impl<'a> BranchMap<'a> {
         
         // creates a list of branch maps for each branch
         // the root node is excluded and will be added later
-        let mut branch_maps: Vec<BranchMap<'a>> = Vec::new();
+        let mut branch_maps: Vec<BranchMap> = Vec::new();
         for end_point_id in end_point_ids {
             // gets the end point node
             let end_point_result = tree.get(end_point_id);
@@ -213,7 +233,7 @@ impl<'a> BranchMap<'a> {
                         .convert("BranchMap::build_branch_maps()")
                         .fail("Failed to create BranchMap.", "BranchMap::build_branch_maps()")
                 }
-                current_node = next_node_result.wont_fail("This is past an is_fail() guard clause.", "BranchMap::build_branch_maps()()");
+                current_node = next_node_result.wont_fail("This is past an is_fail() guard clause.", "BranchMap::build_branch_maps()");
             }
 
             // adds the branch map to the list of branch map
@@ -225,7 +245,17 @@ impl<'a> BranchMap<'a> {
         // adds the root to the right branch map
         let mut added_root = false;
         for branch_map in &mut branch_maps {
-            if branch_map.get_branch_id() == tree.get_root().get_branch_id() {
+            // gets the branch id
+            let branch_map_branch_id_result = branch_map.get_branch_id(tree);
+            if branch_map_branch_id_result.is_fail() {
+                return branch_map_branch_id_result
+                    .convert("BranchMap::build_branch_maps()")
+                    .fail("Failed to create BranchMap.", "BranchMap::build_branch_maps()")
+            }
+            let branch_map_branch_id = branch_map_branch_id_result.wont_fail("This is past an is_fail() guard clause.", "BranchMap::build_branch_maps()");
+
+            // checks for a match
+            if branch_map_branch_id == tree.get_root().get_branch_id() {
                 branch_map.add_node_upstream(tree.get_root());
                 added_root = true;
             }
@@ -244,15 +274,15 @@ impl<'a> BranchMap<'a> {
     /// Creates a new `BranchMap`.
     /// This is only used in building a collection of `BranchMap`s from a given `Tree`.
     #[must_use]
-    fn new(node: &'a Node) -> BranchMap<'a> {
-        let first_nodule = Nodule::new(node, 0);
+    fn new(first_node: &Node) -> BranchMap {
+        let first_nodule = Nodule::new(first_node.get_id(), 0);
         BranchMap { nodules: vec![first_nodule], next_nodule: 0 }
     }
     
     /// Adds a new `Node` to the `BranchMap` upstream of last `Node`.
-    fn add_node_upstream(&mut self, node: &'a Node) {
+    fn add_node_upstream(&mut self, node: &Node) {
         let last_y = self.nodules[self.nodules.len() - 1].get_y();
-        let new_nodule = Nodule::new(node, last_y + 1);
+        let new_nodule = Nodule::new(node.get_id(), last_y + 1);
         self.nodules.push(new_nodule);
     }
 
@@ -268,22 +298,22 @@ impl<'a> BranchMap<'a> {
     // basic getters
     /// Gets an immutable reference to the `Nodule`s.
     #[must_use]
-    fn get_nodules(&self) -> &Vec<Nodule<'a>> { &self.nodules }
+    fn get_nodules(&self) -> &Vec<Nodule> { &self.nodules }
     
     /// Gets a mutable reference to the `Nodule`s.
     #[must_use]
-    fn get_nodules_mut(&mut self) -> &mut Vec<Nodule<'a>> { &mut self.nodules }
+    fn get_nodules_mut(&mut self) -> &mut Vec<Nodule> { &mut self.nodules }
     
     /// Gets the branch id of the `BranchMap`.
     #[must_use]
-    fn get_branch_id(&self) -> Uuid { self.nodules[0].get_node().get_branch_id() }
+    fn get_branch_id(&self, tree: &Tree) -> Schrod<Uuid> { tree.get_branch_id_for(self.nodules[0].get_node_id()) }
 
 
 
     // parsing
     /// Gets the next `Nodule` being explored when assembling all `Nodule`s into a `Map`.
     #[must_use]
-    fn get_next_nodule(&mut self) -> Option<Nodule<'a>> {
+    fn get_next_nodule(&mut self) -> Option<Nodule> {
         if self.next_nodule < self.nodules.len() - 1 {
             let nodule = self.nodules[self.next_nodule].clone();
             self.next_nodule += 1;
@@ -297,15 +327,15 @@ impl<'a> BranchMap<'a> {
 
 /// Holds a reference to a `Node` and it's position relative to other `Node`s/`Nodule`s.
 #[derive(Debug, Clone)]
-struct Nodule<'a> {
-    /// The `Node` being referenced.
-    node: &'a Node,
+struct Nodule {
+    /// The id of the `Node` being referenced.
+    node_id: Uuid,
     ///How far out sideways this branch is visually.
     x: u32,
     /// How far down the tree the `Node` is.
     y: u32,
 }
-impl<'a> Nodule<'a> {
+impl Nodule {
     // initializing
     /// Creates a new `Nodule`.
     /// The position is set up in stages. First the `BranchMap`s are created and each `Nodule`
@@ -313,15 +343,15 @@ impl<'a> Nodule<'a> {
     /// Then when all the `BranchMap`s are combined the positions are updated to be relative to
     /// the same overall grid/map.
     #[must_use]
-    fn new(node: &'a Node, y: u32) -> Nodule<'a> {
-        Nodule { node, x: 0, y }
+    fn new(node_id: Uuid, y: u32) -> Nodule {
+        Nodule { node_id, x: 0, y }
     }
 
 
     
     // basic getters
-    /// Gets the `Node`.
-    fn get_node(&self) -> &Node { &self.node }
+    /// Gets the id of the `Node`.
+    fn get_node_id(&self) -> Uuid { self.node_id }
     
     /// Gets the `x` position.
     #[must_use]
@@ -368,7 +398,7 @@ impl<'a> Nodule<'a> {
     const NODE_SPACING: f32 = Nodule::NODE_SIZE * 2.0;
     
     /// Draws the given `Nodule` in the `Map`.
-    fn draw_into(&self, app: &App, frame: &mut Frame, is_selected: bool) {
+    fn draw_into(&self, theme: MaterialThemes, tree: &Tree, frame: &mut Frame, is_selected: bool) {
         // getting the nodule shape path
         let shape = Path::new(|pen| {
             // top left of the nodule
@@ -393,11 +423,15 @@ impl<'a> Nodule<'a> {
 
         // coloring
         let background =
-            if is_selected { MaterialColors::accent(app.material_theme()).materialized(Materials::Plastic, Depths::Flat, false, app.material_theme()) }
-            else { MaterialColors::Card.materialized(Materials::Plastic, Depths::Flat, false, app.material_theme()) };
+            if is_selected { MaterialColors::accent(theme).materialized(Materials::Plastic, Depths::Flat, false, theme) }
+            else { MaterialColors::Card.materialized(Materials::Plastic, Depths::Flat, false, theme) };
         frame.fill(&shape, Fill::from(background));
     
         // icon
-        frame.fill_text(self.get_node().get_operation().canvas_icon(app));
+        let node_result = tree.get(self.get_node_id());
+        if node_result.is_pass() { // getting the node should never fail, but if it does an icon won't be displayed
+            let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Nodule::draw_into()");
+            frame.fill_text(node.get_operation().canvas_icon(theme));
+        }
     }
 }

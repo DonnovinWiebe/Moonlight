@@ -71,6 +71,7 @@ impl App {
     
         // if the app loaded successfully, the app runs as normal
         match signal {
+            // initial app loading
             Signal::StartLoading => {
                 Task::done(Signal::FinishedLoading)
             },
@@ -78,6 +79,13 @@ impl App {
             Signal::FinishedLoading => {
                 Task::none()
             },
+
+
+            
+            // node tree
+            Signal::SelectNode(Uuid) => {
+                Task::none()
+            }
         }
     }
     

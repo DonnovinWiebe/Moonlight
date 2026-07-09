@@ -61,9 +61,7 @@ impl Tree {
     // basic getters
     /// Gets the `root` `Node`.
     #[must_use]
-    pub fn get_root(&self) -> &Node {
-        &self.root
-    }
+    pub fn get_root(&self) -> &Node { &self.root }
     
     /// Gets a `Handle` that `Iced` can display.
     #[must_use]

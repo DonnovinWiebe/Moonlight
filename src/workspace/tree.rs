@@ -232,6 +232,20 @@ impl Tree {
         Pass(verified_end_points)
     }
 
+    /// Gets the branch id for the given `Node`.
+    #[must_use]
+    pub fn get_branch_id_for(&self, node_id: Uuid) -> Schrod<Uuid> {
+        let node_result = self.get(node_id);
+        match node_result {
+            Pass(node) => { Pass(node.get_branch_id()) }
+            Fail(_) => {
+                node_result
+                    .convert("Tree::get_branch_id_for()")
+                    .fail(&format!("Failed to get branch id for {node_id}."), "Tree::get_branch_id_for()")
+            }
+        }
+    }
+
     /// Gets every branch id.
     #[must_use]
     pub fn get_branch_ids(&self) -> Vec<Uuid> {

@@ -1,20 +1,108 @@
-use iced::widget::canvas::{Fill, Frame, Path};
-use iced::{Point};
+use iced::mouse::Cursor;
+use iced::widget::canvas::{self, Action, Cache, Fill, Frame, Path, Event, Geometry, Program};
+use iced::{Color, Point, Vector};
+use iced::{mouse, Rectangle, Renderer, Theme};
 use materialui::material::MaterialThemes;
-use materialui::{components::ThemeProvider, material::{Depths, MaterialColors, Materials}};
+use materialui::{material::{Depths, MaterialColors, Materials}};
 use schrod::Schrod::{self, Pass};
 use uuid::Uuid;
+use crate::state::signal::Signal;
+use crate::workspace::{node::Node, tree::Tree};
 
-use crate::{state::app::App, workspace::{node::Node, tree::Tree}};
-
-pub struct Map {
+/// Holds a visual representation of the `Tree`.
+pub struct Map<'a> {
+    /// Holds a reference to the `Tree` that this `Map` represents.
+    tree: &'a Tree,
+    /// The list of positioned `Nodule`s.
+    /// Each `Nodule` corresponds to a specific `Node`.
     nodules: Vec<Nodule>,
+    /// Holds cached widget information.
+    cache: Cache,
+    /// Holds a copy of the current `MaterialTheme` from the `App`.
+    theme: MaterialThemes,
 }
-impl Map {
+impl<'a> canvas::Program<Signal> for Map<'a> {
+    type State = MapState;
+
+    fn draw(&self, state: &MapState, renderer: &Renderer, _theme: &Theme, bounds: Rectangle, _cursor: mouse::Cursor) -> Vec<Geometry> {
+        // creating the drawn geometry
+        let geometry = self.cache.draw(renderer, bounds.size(), |frame| {
+            // filling the background
+            frame.fill_rectangle(
+                Point::ORIGIN,
+                bounds.size(),
+                Color::TRANSPARENT,
+            );
+
+            // drawing in the frame
+            frame.with_save(|frame| {
+                // moving around
+                frame.translate(state.pan_offset);
+                frame.scale(state.zoom);
+
+                // drawing the nodules
+                for nodule in &self.nodules {
+                    let selected = false;
+                    nodule.draw_into(self.theme, &self.tree, frame, selected);
+                }
+            });
+        });
+
+        // returning the drawn geometry
+        vec![geometry]
+    }
+
+    fn update(&self, state: &mut MapState, event: &Event, bounds: Rectangle, cursor: Cursor) -> Option<Action<Signal>> {
+        // checks what the mouse is doing
+        match event {
+            // left click
+            Event::Mouse(mouse::Event::ButtonPressed(mouse::Button::Left)) => {
+                // checks if the mouse position in inside the `Map` area
+                if let Some(mouse_position) = cursor.position_in(bounds) {
+                    // transform mouse position according to the pan and zoom values
+                    let map_position = Point::new(
+                        (mouse_position.x - state.pan_offset.x) / state.zoom,
+                        (mouse_position.y - state.pan_offset.y) / state.zoom,
+                    );
+
+                    // checks if a nodule was clicked
+                    if let Some(id) = self.hit_test(map_position) {
+                        return Some(Action::publish(Signal::SelectNode(id)));
+                    }
+                }
+
+                // the mouse was not inside the `Map` area
+                None
+            }
+
+            // zooming
+            Event::Mouse(mouse::Event::WheelScrolled { delta }) => {
+                // getting the scroll amount
+                let scroll = match delta {
+                    mouse::ScrollDelta::Lines { y, .. } => y,
+                    mouse::ScrollDelta::Pixels { y, .. } => y,
+                };
+                
+                // setting the zoom
+                state.zoom = (state.zoom + scroll * 0.1).clamp(0.2, 4.0);
+                Some(Action::request_redraw())
+            }
+
+            // no other events checked
+            _ => None,
+        }
+    }
+
+    fn mouse_interaction(&self, state: &MapState, _bounds: Rectangle, _cursor: mouse::Cursor) -> mouse::Interaction {
+        if state.is_panning { mouse::Interaction::Grabbing }
+        else { mouse::Interaction::default() }
+    }
+}
+impl<'a> Map<'a> {
     // initializing
     /// Creates a new `Map`.
     #[must_use]
-    pub fn new(tree: &Tree) -> Schrod<Map> {
+    pub fn new(tree: &'a Tree, theme: MaterialThemes) -> Schrod<Map> {
         // builds individual branch maps
         let branch_maps_result = BranchMap::build_branch_maps(tree);
         if branch_maps_result.is_fail() {
@@ -34,7 +122,7 @@ impl Map {
         let assembled_nodules = assembled_nodules_result.wont_fail("This is past an is_fail() guard clause.", "Map::new()");
 
         // returns a new Map
-        Pass(Map { nodules: assembled_nodules })
+        Pass(Map { tree, nodules: assembled_nodules, cache: Cache::new(), theme })
     }
     
     /// Assembles a list of `BranchMap`s into a collection of positioned `Nodule`s.
@@ -156,6 +244,29 @@ impl Map {
             largest_x + (Map::PADDING * 2),
             largest_y + (Map::PADDING * 2),
         )
+    }
+
+    /// Checks if a `Nodule` was clicked.
+    #[must_use]
+    fn hit_test(&self, map_position: Point) -> Option<Uuid> { None }
+}
+
+
+
+/// Holds `canvas` related state information for the `Map`.
+pub struct MapState {
+    /// Holds the pan value.
+    pan_offset: Vector,
+    /// Holds the zoom value.
+    zoom: f32,
+    /// Holds if the `Map` is currently being panned over.
+    is_panning: bool,
+    /// Holds where dragging started for panning.
+    drag_start: Option<Point>,
+}
+impl Default for MapState {
+    fn default() -> Self {
+        Self { pan_offset: Vector::new(0.0, 0.0), zoom: 1.0, is_panning: false, drag_start: None }
     }
 }
 
@@ -343,14 +454,13 @@ impl Nodule {
     /// Then when all the `BranchMap`s are combined the positions are updated to be relative to
     /// the same overall grid/map.
     #[must_use]
-    fn new(node_id: Uuid, y: u32) -> Nodule {
-        Nodule { node_id, x: 0, y }
-    }
+    fn new(node_id: Uuid, y: u32) -> Nodule { Nodule { node_id, x: 0, y } }
 
 
     
     // basic getters
     /// Gets the id of the `Node`.
+    #[must_use]
     fn get_node_id(&self) -> Uuid { self.node_id }
     
     /// Gets the `x` position.

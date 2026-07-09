@@ -1,8 +1,10 @@
-use iced::Point;
+use iced::widget::canvas::{Fill, Frame, Path};
+use iced::{Point};
+use materialui::{components::ThemeProvider, material::{Depths, MaterialColors, Materials}};
 use schrod::Schrod::{self, Pass};
 use uuid::Uuid;
 
-use crate::workspace::{node::Node, tree::Tree};
+use crate::{state::app::App, workspace::{node::Node, tree::Tree}};
 
 pub struct Map<'a> {
     nodules: Vec<Nodule<'a>>,
@@ -10,6 +12,7 @@ pub struct Map<'a> {
 impl<'a> Map<'a> {
     // initializing
     /// Creates a new `Map`.
+    #[must_use]
     pub fn new(tree: &'a Tree) -> Schrod<Map<'a>> {
         // builds individual branch maps
         let branch_maps_result = BranchMap::build_branch_maps(tree);
@@ -34,6 +37,7 @@ impl<'a> Map<'a> {
     }
     
     /// Assembles a list of `BranchMap`s into a collection of positioned `Nodule`s.
+    #[must_use]
     fn assemble_nodules(tree: &'a Tree, mut branch_maps: Vec<BranchMap<'a>>) -> Schrod<Vec<Nodule<'a>>> {
         // the nodules that have been positioned
         let mut mapped_nodules: Vec<Nodule<'a>> = Vec::new();
@@ -109,6 +113,29 @@ impl<'a> Map<'a> {
 
         // returns the mapped nodules
         Pass(mapped_nodules)
+    }
+
+
+
+    // drawing
+    /// How much space is around the `Nodule` tree in the `Map`.
+    const PADDING: u32 = 16;
+    
+    /// Gets the overall size of the rendered `Map`.
+    #[must_use]
+    pub fn get_bounds(&self) -> (u32, u32) {
+        let mut largest_x = 0;
+        let mut largest_y = 0;
+        
+        for nodule in &self.nodules {
+            if nodule.get_x() > largest_x { largest_x = nodule.get_x(); }
+            if nodule.get_y() > largest_y { largest_y = nodule.get_x(); }
+        }
+        
+        (
+            largest_x + (Map::PADDING * 2),
+            largest_y + (Map::PADDING * 2),
+        )
     }
 }
 
@@ -274,9 +301,9 @@ struct Nodule<'a> {
     /// The `Node` being referenced.
     node: &'a Node,
     ///How far out sideways this branch is visually.
-    x: u8,
+    x: u32,
     /// How far down the tree the `Node` is.
-    y: u8,
+    y: u32,
 }
 impl<'a> Nodule<'a> {
     // initializing
@@ -286,7 +313,7 @@ impl<'a> Nodule<'a> {
     /// Then when all the `BranchMap`s are combined the positions are updated to be relative to
     /// the same overall grid/map.
     #[must_use]
-    fn new(node: &'a Node, y: u8) -> Nodule<'a> {
+    fn new(node: &'a Node, y: u32) -> Nodule<'a> {
         Nodule { node, x: 0, y }
     }
 
@@ -298,24 +325,79 @@ impl<'a> Nodule<'a> {
     
     /// Gets the `x` position.
     #[must_use]
-    fn get_x(&self) -> u8 { self.x }
+    fn get_x(&self) -> u32 { self.x }
 
     /// Gets the `y` position.
     #[must_use]
-    fn get_y(&self) -> u8 { self.y }
+    fn get_y(&self) -> u32 { self.y }
 
 
 
     // basic editing
     /// Adds a position offset.
-    fn add_position_offset(&mut self, offset_x: u8, offset_y: u8) {
+    fn add_position_offset(&mut self, offset_x: u32, offset_y: u32) {
         self.x += offset_x;
         self.y += offset_y;
     }
     
     /// Sets the `x` position.
-    fn set_x(&mut self, new_x: u8) { self.x = new_x }
+    fn set_x(&mut self, new_x: u32) { self.x = new_x }
 
     /// Sets the `y` position.
-    fn set_y(&mut self, new_y: u8) { self.y = new_y }
+    fn set_y(&mut self, new_y: u32) { self.y = new_y }
+
+
+
+    // drawing
+    /// The size of the `Nodule` in the `Map`.
+    const NODE_SIZE: f32 = Nodule::NODE_SYMBOL_SIZE + (2.0 * Nodule::NODE_INNER_PADDING);
+    
+    /// The size of the `Operation` symbol in the `Map`.
+    const NODE_SYMBOL_SIZE: f32 = 16.0;
+    
+    /// How much space there is between the `Nodule`'s symbol and outer edges in the `Map`.
+    const NODE_INNER_PADDING: f32 = 8.0;
+    
+    /// How round the `Nodule`'s corners are in the `Map`.
+    const NODE_CORNER_RADIUS: f32 = 4.0;
+    
+    /// The length of the straight sections in the `Nodule`'s outer edges in the `Map`.
+    const NODE_STRAIGH_WALL_LENGTH: f32 = Nodule::NODE_SIZE - (2.0 * Nodule::NODE_CORNER_RADIUS);
+    
+    /// The space between `Nodule`s in the `Map`.
+    const NODE_SPACING: f32 = Nodule::NODE_SIZE * 2.0;
+    
+    /// Draws the given `Nodule` in the `Map`.
+    fn draw_into(&self, app: &App, frame: &mut Frame, is_selected: bool) {
+        // getting the nodule shape path
+        let shape = Path::new(|pen| {
+            // top left of the nodule
+            let x = (self.x as f32 * Nodule::NODE_SPACING) - (Nodule::NODE_SIZE / 2.0);
+            let y = (self.y as f32 * Nodule::NODE_SPACING) - (Nodule::NODE_SIZE / 2.0);
+            // wall dimensions
+            let r = Nodule::NODE_CORNER_RADIUS;
+            let w = Nodule::NODE_STRAIGH_WALL_LENGTH;
+            
+            // drawing
+            pen.move_to(Point::new(x + r, y));
+            pen.line_to(Point::new(x + w - r, y));
+            pen.arc_to(Point::new(x + w, y), Point::new(x + w, y + r), r);
+            pen.line_to(Point::new(x + w, y + w - r));
+            pen.arc_to(Point::new(x + w, y + w), Point::new(x + w - r, y + w), r);
+            pen.line_to(Point::new(x + r, y + w));
+            pen.arc_to(Point::new(x, y + w), Point::new(x, y + w - r), r);
+            pen.line_to(Point::new(x, y + r));
+            pen.arc_to(Point::new(x, y), Point::new(x + r, y), r);
+            pen.close();
+        });
+
+        // coloring
+        let background =
+            if is_selected { MaterialColors::accent(app.material_theme()).materialized(Materials::Plastic, Depths::Flat, false, app.material_theme()) }
+            else { MaterialColors::Card.materialized(Materials::Plastic, Depths::Flat, false, app.material_theme()) };
+        frame.fill(&shape, Fill::from(background));
+    
+        // icon
+        frame.fill_text(self.get_node().get_operation().canvas_icon(app));
+    }
 }

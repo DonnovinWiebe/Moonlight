@@ -1,7 +1,7 @@
 use iced::{Element, Subscription, Task, Theme, event, widget::Text};
 use materialui::{components::{PageProvider, ThemeProvider}, material::MaterialThemes};
 
-use crate::{state::{signal::Signal}, workspace::tree::Tree};
+use crate::{pages::application_errors_page::app_errors_page, state::signal::Signal, workspace::tree::Tree};
 
 
 
@@ -144,6 +144,14 @@ impl App {
     /// Renders the `App`.
     #[must_use]
     pub fn view<'a>(&'a self) -> Element<'a, Signal> {
-        Text::new("Moonlight").into()
+        // displays errors as they occur
+        if !self.app_errors.is_empty() {
+            return app_errors_page(self).into()
+        }
+
+        // displays the current page
+        match self.page {
+            Pages::Project => { Text::new("Moonlight").into() }
+        }
     }
 }

@@ -10,19 +10,19 @@ use materialui::material::{Depths, MaterialColors, MaterialStyle, Materials};
 use crate::state::app::App;
 use crate::state::signal::Signal;
 
-/// The page used to display application errors as they happen.
+/// The page used to display errors as they happen.
 #[must_use]
-pub fn application_errors_page<'a>(
+pub fn app_errors_page<'a>(
     app: &'a App,
 ) -> Stack<'a, Signal> {
     stack![
-        container(application_errors_panel(app)).center(Fill),
+        container(app_errors_panel(app)).center(Fill),
         header(app, Vec::new()),
     ]
 }
 
 /// Displays the errors collected by the `App`.
-fn application_errors_panel<'a>(
+fn app_errors_panel<'a>(
     app: &'a App,
 ) -> Element<'a, Signal> {
     panel(

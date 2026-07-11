@@ -7,7 +7,6 @@ use crate::{state::{signal::Signal}, workspace::tree::Tree};
 
 /// The pages available in the `App`.
 pub enum Pages {
-    AppErrors,
     Project,
 }
 
@@ -30,14 +29,12 @@ pub struct App {
 impl PageProvider for App {
     fn page_name(&self) -> &str {
         match self.page {
-            Pages::AppErrors => { "Errors" }
             Pages::Project => { "Project Space" }
         }
     }
 
     fn page_icon(&self) -> &str {
         match self.page {
-            Pages::AppErrors => { "circle-exclamation" }
             Pages::Project => { "table-cells" }
         }
     }

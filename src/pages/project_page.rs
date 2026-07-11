@@ -4,6 +4,7 @@ use materialui::{components::{Orientations, Spacing, TextSizes, spacer, ui_strin
 use crate::state::{app::App, signal::Signal};
 
 /// A basic image view for displaying the current image for the current `Node` in the current `Tree`.
+#[must_use]
 pub fn image_viewer<'a>(app: &'a App) -> Element<'a, Signal> {
     let current_tree_result = app.get_current_tree();
     if current_tree_result.is_none() { return ui_string(app, "Start a project!", TextSizes::LargeHeading, MaterialColors::StrongText) }

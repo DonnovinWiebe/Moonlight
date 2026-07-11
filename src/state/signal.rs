@@ -7,6 +7,9 @@ pub enum Signal {
     StartLoading,
     FinishedLoading,
 
+    // errors
+    DismissErrors,
+
     // node tree
     SelectNode(Uuid),
 }

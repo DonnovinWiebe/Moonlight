@@ -8,6 +8,7 @@ use crate::state::app::App;
 pub mod workspace;
 pub mod state;
 pub mod ui;
+pub mod pages;
 
 const FA_SOLID_BYTES: &[u8] = include_bytes!("../assets/icons/otfs/Font Awesome 7 Free-Solid-900.otf");
 

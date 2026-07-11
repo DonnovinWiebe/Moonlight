@@ -1,23 +1,48 @@
 use iced::{Element, Subscription, Task, Theme, event, widget::Text};
-use materialui::{components::ThemeProvider, material::MaterialThemes};
+use materialui::{components::{PageProvider, ThemeProvider}, material::MaterialThemes};
 
-use crate::{state::signal::Signal, workspace::tree::Tree};
+use crate::{state::{signal::Signal}, workspace::tree::Tree};
+
+
+
+/// The pages available in the `App`.
+pub enum Pages {
+    AppErrors,
+    Project,
+}
+
+
 
 /// The central application container.
 /// This holds the `Bank` and all ui/ux state information.
 #[allow(clippy::struct_excessive_bools)] // This is more ergonomic than using enums for bool flags.
 pub struct App {
     // basic app state
-    material_theme: MaterialThemes,
-    application_failures: Vec<String>,
     theme: Theme,
+    material_theme: MaterialThemes,
+    app_errors: Vec<String>,
+    page: Pages,
 
     // projects
     current_tree: Option<usize>,
     orchard: Vec<Tree>,
 }
+impl PageProvider for App {
+    fn page_name(&self) -> &str {
+        match self.page {
+            Pages::AppErrors => { "Errors" }
+            Pages::Project => { "Project Space" }
+        }
+    }
+
+    fn page_icon(&self) -> &str {
+        match self.page {
+            Pages::AppErrors => { "circle-exclamation" }
+            Pages::Project => { "table-cells" }
+        }
+    }
+}
 impl ThemeProvider for App {
-    /// Gets the current `MaterialTheme'.
     fn material_theme(&self) -> MaterialThemes {
         self.material_theme
     }
@@ -25,12 +50,14 @@ impl ThemeProvider for App {
 impl App {
     // initializing
     /// Creates a new `App`.
+    #[must_use]
     pub fn new() -> (App, Task<Signal>) {
         let app = App {
-            // basic app state
-            material_theme: MaterialThemes::Midnight,
-            application_failures: Vec::new(),
+            // state
             theme: MaterialThemes::Midnight.generate_iced_palette(),
+            material_theme: MaterialThemes::Midnight,
+            app_errors: Vec::new(),
+            page: Pages::Project,
 
             // projects
             current_tree: None,
@@ -42,19 +69,33 @@ impl App {
 
 
 
-    // basic getters
+    // app info getters
     /// The tile of the `App`.
     #[must_use]
     pub fn title(&self) -> String {
         "Moonlight".to_string()
     }
+
+
     
-    /// Gets the current `Theme`.
+    // state getters
+    /// Gets the current `iced::Theme`.
+    #[must_use]
     pub fn theme(&self) -> Theme {
         self.theme.clone()
     }
 
+    /// Gets the `app_errors`.
+    #[must_use]
+    pub fn get_app_errors(&self) -> &Vec<String> {
+        &self.app_errors
+    }
+
+
+    
+    // project getters
     /// Gets the current `Tree`.
+    #[must_use]
     pub fn get_current_tree(&self) -> Option<&Tree> {
         match &self.current_tree {
             Some(i) => { Some(&self.orchard[*i]) }
@@ -66,9 +107,9 @@ impl App {
 
     // running
     /// Updates the `App` based on a given `Signal`.
+    #[must_use]
     #[allow(clippy::too_many_lines)] // This is going to be large since it is the central signal handler.
     pub fn update(&mut self, signal: Signal) -> Task<Signal> {
-    
         // if the app loaded successfully, the app runs as normal
         match signal {
             // initial app loading
@@ -82,19 +123,29 @@ impl App {
 
 
             
+            // errors
+            Signal::DismissErrors => {
+                self.app_errors.clear();
+                Task::none()
+            },
+
+
+            
             // node tree
             Signal::SelectNode(Uuid) => {
                 Task::none()
-            }
+            },
         }
     }
     
     /// Manages keybind input.
+    #[must_use]
     pub fn subscription(&self) -> Subscription<Signal> {
         event::listen_with(|event, _status, _window| { None })
     }
 
     /// Renders the `App`.
+    #[must_use]
     pub fn view<'a>(&'a self) -> Element<'a, Signal> {
         Text::new("Moonlight").into()
     }

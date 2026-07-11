@@ -2002,9 +2002,9 @@ dependencies = [
 
 [[package]]
 name = "materialui"
-version = "1.0.0"
+version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22435328095d6925811f52fb89e077729a277d3db9b309a5b3318b2295b13d72"
+checksum = "64a4ce648a1ed9d699c81a5f7111ffe3652af4aa2362596ef6e7bbd7c690fb17"
 dependencies = [
  "iced",
  "iced_font_awesome",

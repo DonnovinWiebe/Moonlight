@@ -21,7 +21,7 @@ pub struct Map<'a> {
     /// Holds a copy of the current `MaterialTheme` from the `App`.
     theme: MaterialThemes,
 }
-impl<'a> canvas::Program<Signal> for Map<'a> {
+impl<'a> Program<Signal> for Map<'a> {
     type State = MapState;
 
     fn draw(&self, state: &MapState, renderer: &Renderer, _theme: &Theme, bounds: Rectangle, _cursor: mouse::Cursor) -> Vec<Geometry> {
@@ -102,7 +102,7 @@ impl<'a> Map<'a> {
     // initializing
     /// Creates a new `Map`.
     #[must_use]
-    pub fn new(tree: &'a Tree, theme: MaterialThemes) -> Schrod<Map> {
+    pub fn new(tree: &'a Tree, theme: MaterialThemes) -> Schrod<Map<'a>> {
         // builds individual branch maps
         let branch_maps_result = BranchMap::build_branch_maps(tree);
         if branch_maps_result.is_fail() {

@@ -1,6 +1,6 @@
 use iced::mouse::Cursor;
 use iced::widget::canvas::{self, Action, Cache, Fill, Frame, Path, Event, Geometry, Program};
-use iced::{Color, Point, Vector};
+use iced::{Color, Point, Vector, never};
 use iced::{mouse, Rectangle, Renderer, Theme};
 use materialui::material::MaterialThemes;
 use materialui::{material::{Depths, MaterialColors, Materials}};
@@ -16,7 +16,7 @@ pub struct Map<'a> {
     /// The list of positioned `Nodule`s.
     /// Each `Nodule` corresponds to a specific `Node`.
     nodules: Vec<Nodule>,
-    /// Holds cached widget information.
+    /// Holds cached display information.
     cache: Cache,
     /// Holds a copy of the current `MaterialTheme` from the `App`.
     theme: MaterialThemes,
@@ -103,17 +103,8 @@ impl<'a> Map<'a> {
     /// Creates a new `Map`.
     #[must_use]
     pub fn new(tree: &'a Tree, theme: MaterialThemes) -> Schrod<Map<'a>> {
-        // builds individual branch maps
-        let branch_maps_result = BranchMap::build_branch_maps(tree);
-        if branch_maps_result.is_fail() {
-            return branch_maps_result
-                .convert("Map::new()")
-                .fail("Failed to create new Map.", "Map::new()");
-        }
-        let branch_maps = branch_maps_result.wont_fail("This is past an is_fail() guard clause.", "Map::new()");
-
-        // assembles the nodules from the branch maps
-        let assembled_nodules_result = Map::assemble_nodules(tree, branch_maps);
+        // assembles the nodules
+        let assembled_nodules_result = Map::assemble_nodules(tree);
         if assembled_nodules_result.is_fail() {
             return assembled_nodules_result
                 .convert("Map::new()")
@@ -124,10 +115,35 @@ impl<'a> Map<'a> {
         // returns a new Map
         Pass(Map { tree, nodules: assembled_nodules, cache: Cache::new(), theme })
     }
-    
-    /// Assembles a list of `BranchMap`s into a collection of positioned `Nodule`s.
+
+    /// Assembles a collection of positioned `Nodule`s.
     #[must_use]
-    fn assemble_nodules(tree: &Tree, mut branch_maps: Vec<BranchMap>) -> Schrod<Vec<Nodule>> {
+    fn assemble_nodules(tree: &Tree) -> Schrod<Vec<Nodule>> {
+        // builds individual branch maps
+        let branch_maps_result = BranchMap::build_branch_maps(tree);
+        if branch_maps_result.is_fail() {
+            return branch_maps_result
+                .convert("Map::assemble_nodules()")
+                .fail("Failed to assemble `Nodule`s.", "Map::assemble_nodules()");
+        }
+        let branch_maps = branch_maps_result.wont_fail("This is past an is_fail() guard clause.", "Map::assemble_nodules()");
+
+        // assembles the nodules from the branch maps
+        let assembled_nodules_result = Map::assemble_nodules_from_branch_maps(tree, branch_maps);
+        if assembled_nodules_result.is_fail() {
+            return assembled_nodules_result
+                .convert("Map::assemble_nodules()")
+                .fail("Failed to assemble `Nodule`s.", "Map::assemble_nodules()");
+        }
+        let assembled_nodules = assembled_nodules_result.wont_fail("This is past an is_fail() guard clause.", "Map::assemble_nodules()");
+
+        // returning the assembled nodules
+        Pass(assembled_nodules)
+    }
+    
+    /// Assembles a collection of positioned `Nodule`s from a list of `BranchMap`s.
+    #[must_use]
+    fn assemble_nodules_from_branch_maps(tree: &Tree, mut branch_maps: Vec<BranchMap>) -> Schrod<Vec<Nodule>> {
         // the nodules that have been positioned
         let mut mapped_nodules: Vec<Nodule> = Vec::new();
         // the current x position of brances so they do not overlap
@@ -155,10 +171,10 @@ impl<'a> Map<'a> {
                     let branch_map_branch_id_result = map.get_branch_id(tree);
                     if branch_map_branch_id_result.is_fail() {
                         return branch_map_branch_id_result
-                            .convert("BranchMap::build_branch_maps()")
-                            .fail("Failed to create BranchMap.", "BranchMap::build_branch_maps()")
+                            .convert("BranchMap::assemble_nodules_from_branch_maps()")
+                            .fail("Failed to create BranchMap.", "BranchMap::assemble_nodules_from_branch_maps()")
                     }
-                    let branch_map_branch_id = branch_map_branch_id_result.wont_fail("This is past an is_fail() guard clause.", "BranchMap::build_branch_maps()");
+                    let branch_map_branch_id = branch_map_branch_id_result.wont_fail("This is past an is_fail() guard clause.", "BranchMap::assemble_nodules_from_branch_maps()");
 
                     // checks if this is the right branch map
                     if branch_map_branch_id == current_branch_ids[current_branch_ids.len() - 1] { break 'block Some(map) }
@@ -166,9 +182,9 @@ impl<'a> Map<'a> {
                 None
             };
             if current_branch_map_result.is_none() {
-                return Schrod::from_option(current_branch_map_result, "Failed to find current Branch Map!", "Map::assemble_nodules()")
-                    .convert("Map::assemble_nodules()")
-                    .fail("Failed to assemble Nodules.", "Map::assemble_nodules()")
+                return Schrod::from_option(current_branch_map_result, "Failed to find current Branch Map!", "Map::assemble_nodules_from_branch_maps()")
+                    .convert("Map::assemble_nodules_from_branch_maps()")
+                    .fail("Failed to assemble Nodules.", "Map::assemble_nodules_from_branch_maps()")
             }
             let current_branch_map = current_branch_map_result.expect("This is past an is_none() guard clause.");
             
@@ -191,19 +207,19 @@ impl<'a> Map<'a> {
                     let node_result = tree.get(nodule.get_node_id());
                     if node_result.is_fail() {
                         return node_result
-                            .convert("Map::assemble_nodules()")
-                            .fail("Failed to assemble Nodules.", "Map::assemble_nodules()")
+                            .convert("Map::assemble_nodules_from_branch_maps()")
+                            .fail("Failed to assemble Nodules.", "Map::assemble_nodules_from_branch_maps()")
                     }
-                    let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Map::assemble_nodules()");
+                    let node = node_result.wont_fail("This is past an is_fail() guard clause.", "Map::assemble_nodules_from_branch_maps()");
                     
                     // gets any new downstream branches
                     let downstream_branches_result = node.get_other_downstream_branches(tree);
                     if downstream_branches_result.is_fail() {
                         return downstream_branches_result
-                            .convert("Map::assemble_nodules()")
-                            .fail("Failed to assemble Nodules.", "Map::assemble_nodules()")
+                            .convert("Map::assemble_nodules_from_branch_maps()")
+                            .fail("Failed to assemble Nodules.", "Map::assemble_nodules_from_branch_maps()")
                     }
-                    let downstream_branche_ids = downstream_branches_result.wont_fail("This is past an is_fail() guard clause.", "Map::assemble_nodules()");
+                    let downstream_branche_ids = downstream_branches_result.wont_fail("This is past an is_fail() guard clause.", "Map::assemble_nodules_from_branch_maps()");
 
                     // adds new branches to the queue
                     current_branch_ids.extend(downstream_branche_ids);
@@ -224,6 +240,32 @@ impl<'a> Map<'a> {
     }
 
 
+
+    // working
+    /// Updates the `MaterialThemes` of the `Map` so it matches the `App`.
+    pub fn update_theme(&mut self, new_theme: MaterialThemes) {
+        self.theme = new_theme;
+        self.cache.clear();
+    }
+
+    /// Tells the `Map` to rebuild to account for new changes in the `Tree`.
+    pub fn rebuild(&mut self) -> Schrod<()> {
+        // assembles the new nodules
+        let assembled_nodules_result = Map::assemble_nodules(self.tree);
+        if assembled_nodules_result.is_fail() {
+            return assembled_nodules_result
+                .convert("Map::update()")
+                .fail("Failed to create new Map.", "Map::update()");
+        }
+        let assembled_nodules = assembled_nodules_result.wont_fail("This is past an is_fail() guard clause.", "Map::update()");
+
+        // updates the nodules and the display cache
+        self.nodules = assembled_nodules;
+        self.cache.clear();
+        Pass(())
+    }
+
+    
 
     // drawing
     /// How much space is around the `Nodule` tree in the `Map`.
